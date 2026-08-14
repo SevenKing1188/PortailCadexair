@@ -59,23 +59,15 @@ async function initDb() {
 
     console.log('Connecté et tables prêtes sur PostgreSQL (Cadexair).');
 
-    // Vérification et création des comptes par défaut
+    // Vérification et création du compte Master par défaut si aucun utilisateur n'existe
     const userCountResult = await pool.query(`SELECT COUNT(*) as count FROM users`);
     if (parseInt(userCountResult.rows[0].count) === 0) {
       const defaultHash = await bcrypt.hash('password123', 10);
       await pool.query(
         `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['admin', defaultHash, 'admin']
+        ['master', defaultHash, 'master']
       );
-      await pool.query(
-        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['employe1', defaultHash, 'employe']
-      );
-      await pool.query(
-        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['employe2', defaultHash, 'employe']
-      );
-      console.log('Comptes par défaut créés avec succès.');
+      console.log('Compte Master par défaut créé avec succès.');
     }
   } catch (err) {
     console.error('Erreur d initialisation BDD PostgreSQL:', err.message);
@@ -131,6 +123,39 @@ app.get('/api/users', authenticateToken, async (req, res) => {
   }
 });
 
+// Créer un utilisateur selon la hiérarchie (Master / Admin secondaire / Employé-Chef d'équipe)
+app.post('/api/users', authenticateToken, async (req, res) => {
+  const { username, password, role } = req.body; // role attendu: 'admin' (secondaire) ou 'employe' (chef d'équipe)
+  const currentUser = req.user;
+
+  // RÈGLE 1 : Seul le master peut créer un administrateur secondaire ('admin')
+  if (role === 'admin' && currentUser.role !== 'master') {
+    return res.status(403).json({ error: 'Seul l administrateur master peut créer des administrateurs secondaires.' });
+  }
+
+  // RÈGLE 2 : Seuls les admins ou le master peuvent créer des utilisateurs
+  if (currentUser.role !== 'master' && currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès refusé. Droits insuffisants pour créer un utilisateur.' });
+  }
+
+  try {
+    const password_hash = await bcrypt.hash(password || 'password123', 10);
+    const insertQuery = `
+      INSERT INTO users (username, password_hash, role) 
+      VALUES ($1, $2, $3)
+      RETURNING id, username, role
+    `;
+    
+    const result = await pool.query(insertQuery, [username, password_hash, role || 'employe']);
+    res.status(201).json({ message: 'Utilisateur créé avec succès', user: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Ce nom d utilisateur existe déjà.' });
+    }
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Historique des clients pour préremplissage
 app.get('/api/clients-history', authenticateToken, async (req, res) => {
   try {
@@ -150,7 +175,7 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
 
     if (history === 'true') {
       query += ` ORDER BY id DESC`;
-    } else if (req.user.role !== 'admin') {
+    } else if (req.user.role !== 'master' && req.user.role !== 'admin') {
       query += ` WHERE (team_lead_id = $1 OR helpers LIKE $2) AND status != 'Terminé' ORDER BY id DESC`;
       params.push(req.user.id, `%${req.user.username}%`);
     } else {
@@ -164,9 +189,11 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// Créer un bon de travail (Admin)
+// Créer un bon de travail (Réservé aux Admins et au Master)
 app.post('/api/work-orders', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Réservé aux admins' });
+  if (req.user.role !== 'master' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Réservé aux administrateurs' });
+  }
 
   const {
     client_name, client_address, appointment_date, appointment_time,
