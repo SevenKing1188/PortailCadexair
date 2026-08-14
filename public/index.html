@@ -1,476 +1,265 @@
-<!DOCTYPE html>
-<html lang="fr">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Cadexair | Portail Opérationnel</title>
-  <style>
-    :root {
-      --bg-color: #0f1115;
-      --card-bg: #161920;
-      --card-border: #232730;
-      --text-main: #ffffff;
-      --text-muted: #9a9ea9;
-      --primary-red: #dc2626;
-      --primary-red-hover: #ef4444;
-      --header-bg: #1c2029;
-      --input-bg: #0d0f12;
-      --accent-green: #10b981;
+const express = require('express');
+const cors = require('cors');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcrypt');
+const path = require('path');
+const { Pool } = require('pg');
+
+const app = express();
+const PORT = process.env.PORT || 10000;
+const JWT_SECRET = process.env.JWT_SECRET || 'cadexair-secret-key-2026';
+
+// Augmentation de la limite pour recevoir les photos en base64
+app.use(cors());
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Configuration de la connexion PostgreSQL (Render ou local)
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+});
+
+// Test de connexion et initialisation de la base de données PostgreSQL
+async function initDb() {
+  try {
+    // Table Utilisateurs
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(100) UNIQUE,
+        password_hash TEXT,
+        role VARCHAR(50)
+      )
+    `);
+
+    // Table Bons de Travail
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS work_orders (
+        id SERIAL PRIMARY KEY,
+        client_name TEXT,
+        client_address TEXT,
+        appointment_date TEXT,
+        appointment_time TEXT,
+        team_lead_id INTEGER,
+        team_lead_name TEXT,
+        helpers TEXT,
+        work_details TEXT,
+        team_lead_comments TEXT,
+        nb_hottes INTEGER DEFAULT 0,
+        nb_portes INTEGER DEFAULT 0,
+        nb_ventilateurs INTEGER DEFAULT 0,
+        photos_data TEXT,
+        time_entries TEXT,
+        status TEXT DEFAULT 'En attente',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+
+    console.log('Connecté et tables prêtes sur PostgreSQL (Cadexair).');
+
+    // Vérification et création du compte Master par défaut si aucun utilisateur n'existe
+    const userCountResult = await pool.query(`SELECT COUNT(*) as count FROM users`);
+    if (parseInt(userCountResult.rows[0].count) === 0) {
+      const defaultHash = await bcrypt.hash('password123', 10);
+      await pool.query(
+        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
+        ['master', defaultHash, 'master']
+      );
+      console.log('Compte Master par défaut créé avec succès.');
     }
+  } catch (err) {
+    console.error('Erreur d initialisation BDD PostgreSQL:', err.message);
+  }
+}
 
-    * { box-sizing: border-box; font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; transition: all 0.2s ease; }
-    body { background-color: var(--bg-color); color: var(--text-main); margin: 0; padding: 20px; }
-    .container { max-width: 1000px; margin: 0 auto; }
-    
-    /* EN-TÊTE / BRANDING */
-    .brand-header { display: flex; justify-content: space-between; align-items: center; padding-bottom: 20px; border-bottom: 2px solid var(--primary-red); margin-bottom: 25px; }
-    .brand-logo { font-size: 1.6rem; font-weight: 800; letter-spacing: 1px; color: #fff; text-transform: uppercase; }
-    .brand-logo span { color: var(--primary-red); }
+initDb();
 
-    /* CARTE ET CONTENEURS */
-    .card { background: var(--card-bg); border: 1px solid var(--card-border); padding: 25px; border-radius: 10px; box-shadow: 0 4px 20px rgba(0,0,0,0.4); margin-bottom: 20px; }
-    .hidden { display: none !important; }
+// Middleware de vérification JWT
+function authenticateToken(req, res, next) {
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Accès non autorisé' });
 
-    /* BOUTONS MODERNES */
-    button { background: var(--primary-red); color: #fff; border: none; padding: 12px 20px; border-radius: 6px; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.95rem; }
-    button:hover { background: var(--primary-red-hover); transform: translateY(-1px); }
-    button.btn-secondary { background: transparent; border: 1px solid var(--card-border); color: var(--text-main); }
-    button.btn-secondary:hover { background: var(--header-bg); border-color: var(--text-muted); }
-    button.btn-success { background: var(--accent-green); }
-    button.btn-success:hover { background: #059669; }
+  jwt.verify(token, JWT_SECRET, (err, user) => {
+    if (err) return res.status(403).json({ error: 'Token invalide' });
+    req.user = user;
+    next();
+  });
+}
 
-    /* ONGLETS NAVIGATION */
-    .tab-container { display: flex; gap: 10px; margin-bottom: 20px; background: var(--card-bg); padding: 5px; border-radius: 8px; border: 1px solid var(--card-border); }
-    .tab-btn { flex: 1; background: transparent; color: var(--text-muted); border: none; padding: 12px; border-radius: 6px; }
-    .tab-btn.active { background: var(--primary-red); color: #fff; font-weight: bold; }
+// --- ROUTES API ---
 
-    /* FORMULAIRES ET INPUTS */
-    input, select, textarea { width: 100%; padding: 12px; margin: 6px 0 16px; border: 1px solid var(--card-border); border-radius: 6px; background: var(--input-bg); color: var(--text-main); font-size: 0.95rem; }
-    input:focus, select:focus, textarea:focus { border-color: var(--primary-red); outline: none; }
-    label { font-size: 0.85rem; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+// Connexion
+app.post('/api/login', async (req, res) => {
+  const { username, password } = req.body;
+  try {
+    const result = await pool.query(`SELECT * FROM users WHERE username = $1`, [username]);
+    if (result.rows.length === 0) return res.status(400).json({ error: 'Utilisateur non trouvé' });
 
-    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
-    .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; }
+    const user = result.rows[0];
+    const validPassword = await bcrypt.compare(password, user.password_hash);
+    if (!validPassword) return res.status(400).json({ error: 'Mot de passe incorrect' });
 
-    /* BONS DE TRAVAIL ET ÉQUIPEMENTS */
-    .wo-card { border-left: 4px solid var(--primary-red); }
-    .wo-card.completed { border-left-color: var(--accent-green); }
-    
-    .status-badge { background: rgba(220, 38, 38, 0.15); color: var(--primary-red); border: 1px solid var(--primary-red); padding: 4px 10px; border-radius: 20px; font-size: 0.8rem; font-weight: bold; }
-    .status-badge.completed { background: rgba(16, 185, 129, 0.15); color: var(--accent-green); border-color: var(--accent-green); }
+    const token = jwt.sign(
+      { id: user.id, username: user.username, role: user.role },
+      JWT_SECRET,
+      { expiresIn: '8h' }
+    );
+    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    .equipement-card { border: 1px solid var(--card-border); padding: 15px; border-radius: 8px; margin-bottom: 12px; background: var(--header-bg); }
-    .photo-box-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
-    .photo-box { border: 2px dashed var(--card-border); padding: 15px; text-align: center; border-radius: 6px; background: var(--input-bg); }
-    .photo-box img { max-width: 100%; max-height: 180px; object-fit: cover; border-radius: 6px; margin-top: 10px; border: 1px solid var(--card-border); }
+// Liste des utilisateurs
+app.get('/api/users', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT id, username, role FROM users`);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-    /* PANNEAU LATÉRAL SLIDE-IN */
-    .sidebar-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.8); backdrop-filter: blur(4px); z-index: 99; opacity: 0; pointer-events: none; transition: opacity 0.3s; }
-    .sidebar-overlay.active { opacity: 1; pointer-events: auto; }
-    .sidebar { position: fixed; top: 0; right: -350px; width: 320px; height: 100vh; background: var(--card-bg); border-left: 1px solid var(--card-border); z-index: 100; transition: right 0.3s cubic-bezier(0.4, 0, 0.2, 1); padding: 25px; display: flex; flex-direction: column; justify-content: space-between; }
-    .sidebar.open { right: 0; }
-    .sidebar-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--card-border); padding-bottom: 15px; }
-    .sidebar-footer { font-size: 0.8em; color: var(--text-muted); text-align: center; border-top: 1px solid var(--card-border); padding-top: 15px; line-height: 1.5; }
-  </style>
-</head>
-<body>
+// Créer un utilisateur selon la hiérarchie (Master / Admin secondaire / Employé-Chef d'équipe)
+app.post('/api/users', authenticateToken, async (req, res) => {
+  const { username, password, role } = req.body; // role attendu: 'admin' (secondaire) ou 'employe' (chef d'équipe)
+  const currentUser = req.user;
 
-<!-- PANNEAU LATÉRAL PARAMÈTRES -->
-<div id="sidebar-overlay" class="sidebar-overlay" onclick="closeSidebar()"></div>
-<div id="sidebar" class="sidebar">
-  <div>
-    <div class="sidebar-header">
-      <h3 style="margin:0; text-transform:uppercase; font-size:1.1rem; letter-spacing:1px;">⚙️ Options</h3>
-      <button class="btn-secondary" style="padding: 4px 10px;" onclick="closeSidebar()">&times;</button>
-    </div>
-    <div style="margin-top:20px;">
-      <div style="background: var(--input-bg); border: 1px solid var(--card-border); padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-        <small style="color: var(--text-muted);">Compte actif :</small>
-        <strong id="side-username" style="display:block; font-size: 1.1rem; margin-top:2px;">-</strong>
-      </div>
-      <button style="width:100%; margin-top:20px;" onclick="logout()">Se déconnecter</button>
-    </div>
-  </div>
-  <div class="sidebar-footer">
-    Développé par Guillaume.L pour <b>Cadexair.inc</b><br>
-    © 2026 Tous droits réservés • v1.0
-  </div>
-</div>
-
-<div class="container">
-
-  <!-- EN-TÊTE DU SITE -->
-  <header class="brand-header">
-    <div class="brand-logo">Cadex<span>air</span></div>
-    <button id="settings-btn" class="btn-secondary hidden" onclick="openSidebar()">⚙️ Profil / Options</button>
-  </header>
-
-  <!-- ECRAN DE CONNEXION -->
-  <div id="login-card" class="card" style="max-width: 450px; margin: 40px auto;">
-    <h2 style="margin-top:0; text-align:center; text-transform:uppercase;">Accès Portail</h2>
-    
-    <label>Identifiant</label>
-    <input type="text" id="username" placeholder="Entrez votre identifiant">
-    
-    <label>Mot de passe</label>
-    <input type="password" id="password" placeholder="••••••••">
-    
-    <button style="width:100%; margin-top:10px;" onclick="login()">Se Connecter</button>
-  </div>
-
-  <!-- APPLICATION PRINCIPALE -->
-  <div id="app" class="hidden">
-
-    <!-- FORMULAIRE CRÉATION / ASSIGNATION (ADMIN) -->
-    <div id="admin-wo-card" class="card hidden">
-      <h3 style="margin-top:0; text-transform:uppercase; color:var(--primary-red);">➕ Créer / Réassigner un Bon de Travail</h3>
-      
-      <div style="background: var(--header-bg); border: 1px solid var(--card-border); padding: 12px; border-radius: 8px; margin-bottom: 15px;">
-        <label><b>🔄 Préremplir à partir de l'historique Client :</b></label>
-        <select id="client-history-select" onchange="autofillClient()"></select>
-      </div>
-
-      <div class="grid-2">
-        <div>
-          <label>Nom du Client</label>
-          <input type="text" id="wo-client" placeholder="ex: Restaurant Le Central">
-        </div>
-        <div>
-          <label>Adresse Complète</label>
-          <input type="text" id="wo-address" placeholder="ex: 1234 Rue Principale, Montréal">
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div>
-          <label>Date du RDV</label>
-          <input type="date" id="wo-date">
-        </div>
-        <div>
-          <label>Heure du RDV</label>
-          <input type="time" id="wo-time">
-        </div>
-      </div>
-
-      <div class="grid-2">
-        <div>
-          <label>Chef d'équipe Responsable</label>
-          <select id="wo-lead"></select>
-        </div>
-        <div>
-          <label>Techniciens Helpers (Maint' la touche Ctrl pour sélectionner)</label>
-          <select id="wo-helpers" multiple style="height: 65px;"></select>
-        </div>
-      </div>
-
-      <label>Détails des Travaux Demandés</label>
-      <textarea id="wo-details" rows="2" placeholder="Description claire des tâches..."></textarea>
-
-      <h4 style="margin: 15px 0 5px; text-transform:uppercase; font-size:0.9rem;">🔧 Quantité d'Équipements</h4>
-      <div class="grid-3">
-        <div>
-          <label>Hottes</label>
-          <input type="number" id="wo-nb-hottes" value="1" min="0">
-        </div>
-        <div>
-          <label>Portes d'accès</label>
-          <input type="number" id="wo-nb-portes" value="1" min="0">
-        </div>
-        <div>
-          <label>Ventilateurs</label>
-          <input type="number" id="wo-nb-vents" value="1" min="0">
-        </div>
-      </div>
-
-      <button class="btn-success" style="width: 100%; margin-top:10px;" onclick="createWorkOrder()">Assigner le Bon de Travail</button>
-    </div>
-
-    <!-- ONGLETS NAVIGATION -->
-    <div class="tab-container">
-      <button id="tab-active-btn" class="tab-btn active" onclick="switchTab('active')">📋 Bons de Travail en Cours</button>
-      <button id="tab-history-btn" class="tab-btn" onclick="switchTab('history')">📂 Historique Consultable</button>
-    </div>
-
-    <!-- VUE BONS EN COURS -->
-    <div id="view-active">
-      <div id="wo-list"></div>
-    </div>
-
-    <!-- VUE HISTORIQUE -->
-    <div id="view-history" class="hidden">
-      <div id="wo-history-list"></div>
-    </div>
-
-  </div>
-</div>
-
-<script>
-  let currentUser = null;
-  let token = null;
-  let allUsers = [];
-  let clientsHistory = [];
-  const photosCache = {};
-
-  function openSidebar() { document.getElementById('sidebar').classList.add('open'); document.getElementById('sidebar-overlay').classList.add('active'); }
-  function closeSidebar() { document.getElementById('sidebar').classList.remove('open'); document.getElementById('sidebar-overlay').classList.remove('active'); }
-
-  async function login() {
-    const res = await fetch('/api/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: document.getElementById('username').value, password: document.getElementById('password').value })
-    });
-    const data = await res.json();
-    if (res.ok) {
-      token = data.token;
-      currentUser = data.user;
-      initApp();
-    } else alert(data.error);
+  // RÈGLE 1 : Seul le master peut créer un administrateur secondaire ('admin')
+  if (role === 'admin' && currentUser.role !== 'master') {
+    return res.status(403).json({ error: 'Seul l administrateur master peut créer des administrateurs secondaires.' });
   }
 
-  function logout() { location.reload(); }
+  // RÈGLE 2 : Seuls les admins ou le master peuvent créer des utilisateurs
+  if (currentUser.role !== 'master' && currentUser.role !== 'admin') {
+    return res.status(403).json({ error: 'Accès refusé. Droits insuffisants pour créer un utilisateur.' });
+  }
 
-  async function initApp() {
-    document.getElementById('login-card').classList.add('hidden');
-    document.getElementById('app').classList.remove('hidden');
-    document.getElementById('settings-btn').classList.remove('hidden');
-    document.getElementById('side-username').innerText = currentUser.username;
-
-    await loadUsers();
-    if (currentUser.role === 'admin') {
-      document.getElementById('admin-wo-card').classList.remove('hidden');
-      loadClientsHistory();
+  try {
+    const password_hash = await bcrypt.hash(password || 'password123', 10);
+    const insertQuery = `
+      INSERT INTO users (username, password_hash, role) 
+      VALUES ($1, $2, $3)
+      RETURNING id, username, role
+    `;
+    
+    const result = await pool.query(insertQuery, [username, password_hash, role || 'employe']);
+    res.status(201).json({ message: 'Utilisateur créé avec succès', user: result.rows[0] });
+  } catch (err) {
+    if (err.code === '23505') {
+      return res.status(400).json({ error: 'Ce nom d utilisateur existe déjà.' });
     }
-    loadWorkOrders();
+    res.status(500).json({ error: err.message });
   }
+});
 
-  async function loadUsers() {
-    const res = await fetch('/api/users', { headers: { 'Authorization': 'Bearer ' + token } });
-    allUsers = await res.json();
-    document.getElementById('wo-lead').innerHTML = allUsers.map(u => `<option value="${u.id}">${u.username}</option>`).join('');
-    document.getElementById('wo-helpers').innerHTML = allUsers.map(u => `<option value="${u.username}">${u.username}</option>`).join('');
+// Historique des clients pour préremplissage
+app.get('/api/clients-history', authenticateToken, async (req, res) => {
+  try {
+    const result = await pool.query(`SELECT DISTINCT client_name, client_address, nb_hottes, nb_portes, nb_ventilateurs FROM work_orders`);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  async function loadClientsHistory() {
-    const res = await fetch('/api/clients-history', { headers: { 'Authorization': 'Bearer ' + token } });
-    clientsHistory = await res.json();
-    const select = document.getElementById('client-history-select');
-    select.innerHTML = '<option value="">-- Sélectionner un client existant --</option>' + 
-      clientsHistory.map((c, i) => `<option value="${i}">${c.client_name} (${c.client_address})</option>`).join('');
-  }
+// Liste des bons de travail
+app.get('/api/work-orders', authenticateToken, async (req, res) => {
+  const { history } = req.query;
+  try {
+    let query = `SELECT * FROM work_orders`;
+    let params = [];
 
-  function autofillClient() {
-    const idx = document.getElementById('client-history-select').value;
-    if (idx === '') return;
-    const client = clientsHistory[idx];
-    document.getElementById('wo-client').value = client.client_name;
-    document.getElementById('wo-address').value = client.client_address;
-    document.getElementById('wo-nb-hottes').value = client.nb_hottes;
-    document.getElementById('wo-nb-portes').value = client.nb_portes;
-    document.getElementById('wo-nb-vents').value = client.nb_ventilateurs;
-  }
-
-  function switchTab(tab) {
-    if (tab === 'active') {
-      document.getElementById('tab-active-btn').classList.add('active');
-      document.getElementById('tab-history-btn').classList.remove('active');
-      document.getElementById('view-active').classList.remove('hidden');
-      document.getElementById('view-history').classList.add('hidden');
-      loadWorkOrders();
+    if (history === 'true') {
+      query += ` ORDER BY id DESC`;
+    } else if (req.user.role !== 'master' && req.user.role !== 'admin') {
+      query += ` WHERE (team_lead_id = $1 OR helpers LIKE $2) AND status != 'Terminé' ORDER BY id DESC`;
+      params.push(req.user.id, `%${req.user.username}%`);
     } else {
-      document.getElementById('tab-history-btn').classList.add('active');
-      document.getElementById('tab-active-btn').classList.remove('active');
-      document.getElementById('view-history').classList.remove('hidden');
-      document.getElementById('view-active').classList.add('hidden');
-      loadHistoryOrders();
-    }
-  }
-
-  async function createWorkOrder() {
-    const selectedHelpers = Array.from(document.getElementById('wo-helpers').selectedOptions).map(o => o.value);
-    
-    const payload = {
-      client_name: document.getElementById('wo-client').value,
-      client_address: document.getElementById('wo-address').value,
-      appointment_date: document.getElementById('wo-date').value,
-      appointment_time: document.getElementById('wo-time').value,
-      team_lead_id: document.getElementById('wo-lead').value,
-      helpers: selectedHelpers,
-      work_details: document.getElementById('wo-details').value,
-      nb_hottes: parseInt(document.getElementById('wo-nb-hottes').value) || 0,
-      nb_portes: parseInt(document.getElementById('wo-nb-portes').value) || 0,
-      nb_ventilateurs: parseInt(document.getElementById('wo-nb-vents').value) || 0
-    };
-
-    await fetch('/api/work-orders', {
-      method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-
-    alert('Bon de travail créé !');
-    if (currentUser.role === 'admin') loadClientsHistory();
-    loadWorkOrders();
-  }
-
-  async function loadWorkOrders() {
-    const res = await fetch('/api/work-orders', { headers: { 'Authorization': 'Bearer ' + token } });
-    const data = await res.json();
-    renderOrdersList(data, 'wo-list', false);
-  }
-
-  async function loadHistoryOrders() {
-    const res = await fetch('/api/work-orders?history=true', { headers: { 'Authorization': 'Bearer ' + token } });
-    const data = await res.json();
-    renderOrdersList(data, 'wo-history-list', true);
-  }
-
-  function renderOrdersList(data, containerId, isReadonly) {
-    const container = document.getElementById(containerId);
-    if (data.length === 0) {
-      container.innerHTML = '<div class="card"><p style="color:var(--text-muted); text-align:center;">Aucun bon de travail trouvé.</p></div>';
-      return;
+      query += ` WHERE status != 'Terminé' ORDER BY id DESC`;
     }
 
-    container.innerHTML = data.map(wo => {
-      const photos = JSON.parse(wo.photos_data || '{}');
-      const timeEntries = JSON.parse(wo.time_entries || '{}');
-      const helpersList = JSON.parse(wo.helpers || '[]');
-      const isCompleted = wo.status === 'Terminé';
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
-      return `
-        <div class="card wo-card ${isCompleted ? 'completed' : ''}">
-          <div class="brand-header" style="border:none; padding:0; margin-bottom:15px;">
-            <h3 style="margin:0; font-size:1.2rem;">🏢 ${wo.client_name} <span style="color:var(--text-muted); font-size:0.85em;">(#${wo.id})</span></h3>
-            <span class="status-badge ${isCompleted ? 'completed' : ''}">${wo.status}</span>
-          </div>
-
-          <p><b>📍 Adresse :</b> ${wo.client_address}</p>
-          <p><b>📅 Rendez-vous :</b> ${wo.appointment_date} à ${wo.appointment_time}</p>
-          <p><b>👨‍✈️ Chef d'équipe :</b> ${wo.team_lead_name} | <b>🧑‍🔧 Helpers :</b> ${helpersList.join(', ') || 'Aucun'}</p>
-          <p><b>📝 Travaux demandés :</b> ${wo.work_details}</p>
-
-          <hr style="border-color:var(--card-border); margin:20px 0;">
-
-          <h4 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">💬 Remarques du Chef d'équipe</h4>
-          ${isReadonly 
-            ? `<div style="background:var(--input-bg); padding:12px; border-radius:6px; border:1px solid var(--card-border);">${wo.team_lead_comments || '<i>Aucune remarque.</i>'}</div>`
-            : `<textarea id="comments-${wo.id}" rows="2" placeholder="Saisir des observations ou remarques sur l'intervention...">${wo.team_lead_comments || ''}</textarea>`
-          }
-
-          <hr style="border-color:var(--card-border); margin:20px 0;">
-
-          <h4 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">⏱️ Heures de Travail Registrées</h4>
-          <div class="grid-2">
-            <div>
-              <label>Chef d'équipe (${wo.team_lead_name})</label>
-              ${isReadonly 
-                ? `<div>${timeEntries['lead'] || 'Non spécifié'}</div>`
-                : `<input type="text" placeholder="ex: 08:00 - 16:30" id="time-lead-${wo.id}" value="${timeEntries['lead'] || ''}">`
-              }
-            </div>
-            ${helpersList.map((h, idx) => `
-              <div>
-                <label>Helper (${h})</label>
-                ${isReadonly 
-                  ? `<div>${timeEntries['helper_' + idx] || 'Non spécifié'}</div>`
-                  : `<input type="text" placeholder="ex: 08:00 - 16:30" id="time-helper-${wo.id}-${idx}" value="${timeEntries['helper_' + idx] || ''}">`
-                }
-              </div>
-            `).join('')}
-          </div>
-
-          <hr style="border-color:var(--card-border); margin:20px 0;">
-
-          <h4 style="margin-top:0; text-transform:uppercase; font-size:0.9rem;">📸 Inspection Photos (Avant / Après)</h4>
-          ${renderEquipementPhotos(wo.id, 'Hotte', wo.nb_hottes, photos, isReadonly)}
-          ${renderEquipementPhotos(wo.id, 'Porte', wo.nb_portes, photos, isReadonly)}
-          ${renderEquipementPhotos(wo.id, 'Ventilateur', wo.nb_ventilateurs, photos, isReadonly)}
-
-          ${!isReadonly ? `
-            <div style="margin-top:20px;" class="grid-2">
-              <button class="btn-secondary" onclick="saveWorkOrderDetails(${wo.id}, ${helpersList.length})">💾 Enregistrer le rapport</button>
-              ${!isCompleted ? `<button class="btn-success" onclick="markCompleted(${wo.id})">✅ Marquer comme Terminé</button>` : ''}
-            </div>
-          ` : ''}
-        </div>
-      `;
-    }).join('');
+// Créer un bon de travail (Réservé aux Admins et au Master)
+app.post('/api/work-orders', authenticateToken, async (req, res) => {
+  if (req.user.role !== 'master' && req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Réservé aux administrateurs' });
   }
 
-  function renderEquipementPhotos(woId, type, count, photos, isReadonly) {
-    let html = '';
-    for (let i = 1; i <= count; i++) {
-      const keyBefore = `${type}_${i}_before`;
-      const keyAfter = `${type}_${i}_after`;
+  const {
+    client_name, client_address, appointment_date, appointment_time,
+    team_lead_id, helpers, work_details, nb_hottes, nb_portes, nb_ventilateurs
+  } = req.body;
 
-      html += `
-        <div class="equipement-card">
-          <strong style="color:var(--primary-red); font-size:0.95rem;">${type} #${i}</strong>
-          <div class="photo-box-grid">
-            <div class="photo-box">
-              <label>📷 Photo AVANT</label>
-              ${!isReadonly ? `<input type="file" accept="image/*" capture="environment" onchange="uploadPhoto(event, ${woId}, '${keyBefore}')">` : ''}
-              ${photos[keyBefore] ? `<img src="${photos[keyBefore]}">` : '<p style="font-size:0.8em; color:var(--text-muted); margin: 5px 0 0;">Aucune photo</p>'}
-            </div>
-            <div class="photo-box">
-              <label>📷 Photo APRÈS</label>
-              ${!isReadonly ? `<input type="file" accept="image/*" capture="environment" onchange="uploadPhoto(event, ${woId}, '${keyAfter}')">` : ''}
-              ${photos[keyAfter] ? `<img src="${photos[keyAfter]}">` : '<p style="font-size:0.8em; color:var(--text-muted); margin: 5px 0 0;">Aucune photo</p>'}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-    return html;
+  try {
+    const userResult = await pool.query(`SELECT username FROM users WHERE id = $1`, [team_lead_id]);
+    const team_lead_name = userResult.rows.length > 0 ? userResult.rows[0].username : 'Inconnu';
+
+    const insertQuery = `
+      INSERT INTO work_orders 
+      (client_name, client_address, appointment_date, appointment_time, team_lead_id, team_lead_name, helpers, work_details, team_lead_comments, nb_hottes, nb_portes, nb_ventilateurs, photos_data, time_entries, status) 
+      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+      RETURNING id
+    `;
+
+    const values = [
+      client_name, client_address, appointment_date, appointment_time,
+      team_lead_id, team_lead_name, JSON.stringify(helpers || []), work_details, '',
+      nb_hottes || 0, nb_portes || 0, nb_ventilateurs || 0,
+      '{}', '{}', 'En attente'
+    ];
+
+    const result = await pool.query(insertQuery, values);
+    res.status(201).json({ id: result.rows[0].id, client_name });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  function uploadPhoto(event, woId, key) {
-    const file = event.target.files[0];
-    if (!file) return;
+// Mettre à jour un bon de travail
+app.patch('/api/work-orders/:id', authenticateToken, async (req, res) => {
+  const { photos_data, time_entries, team_lead_comments, status } = req.body;
+  const orderId = req.params.id;
 
-    const reader = new FileReader();
-    reader.onload = function(e) {
-      if (!photosCache[woId]) photosCache[woId] = {};
-      photosCache[woId][key] = e.target.result;
-      alert('Photo ajoutée ! N\'oubliez pas d\'enregistrer le rapport.');
-    };
-    reader.readAsDataURL(file);
+  try {
+    const updateQuery = `
+      UPDATE work_orders SET 
+        photos_data = COALESCE($1, photos_data),
+        time_entries = COALESCE($2, time_entries),
+        team_lead_comments = COALESCE($3, team_lead_comments),
+        status = COALESCE($4, status)
+       WHERE id = $5
+    `;
+
+    const values = [
+      photos_data ? JSON.stringify(photos_data) : null,
+      time_entries ? JSON.stringify(time_entries) : null,
+      team_lead_comments !== undefined ? team_lead_comments : null,
+      status || null,
+      orderId
+    ];
+
+    await pool.query(updateQuery, values);
+    res.json({ message: 'Bon de travail mis à jour avec succès' });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
+});
 
-  async function saveWorkOrderDetails(woId, helpersCount) {
-    const timeEntries = {};
-    timeEntries['lead'] = document.getElementById(`time-lead-${woId}`).value;
+// Redirection vers le frontend
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-    for (let i = 0; i < helpersCount; i++) {
-      const el = document.getElementById(`time-helper-${woId}-${i}`);
-      if (el) timeEntries['helper_' + i] = el.value;
-    }
-
-    const comments = document.getElementById(`comments-${woId}`).value;
-
-    await fetch('/api/work-orders/' + woId, {
-      method: 'PATCH',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        time_entries: timeEntries,
-        team_lead_comments: comments,
-        photos_data: photosCache[woId] || undefined
-      })
-    });
-
-    alert('Rapport mis à jour avec succès !');
-    loadWorkOrders();
-  }
-
-  async function markCompleted(woId) {
-    await fetch('/api/work-orders/' + woId, {
-      method: 'PATCH',
-      headers: { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'Terminé' })
-    });
-    loadWorkOrders();
-  }
-</script>
-</body>
-</html>
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`Serveur Cadexair en ligne sur le port ${PORT}`);
+});
