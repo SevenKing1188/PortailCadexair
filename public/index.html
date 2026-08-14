@@ -1,265 +1,301 @@
-const express = require('express');
-const cors = require('cors');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const path = require('path');
-const { Pool } = require('pg');
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portail Cadexair</title>
+    <!-- Tailwind CSS pour un design propre et rapide -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
 
-const app = express();
-const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || 'cadexair-secret-key-2026';
+    <!-- CONTENEUR GLOBAL -->
+    <div id="app" class="flex flex-col min-h-screen">
 
-// Augmentation de la limite pour recevoir les photos en base64
-app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+        <!-- 1. ÉCRAN DE CONNEXION -->
+        <div id="login-screen" class="flex items-center justify-center flex-grow p-4">
+            <div class="bg-white p-8 rounded-xl shadow-lg w-full max-w-md">
+                <div class="text-center mb-6">
+                    <h1 class="text-2xl font-bold text-blue-900">Cadexair</h1>
+                    <p class="text-gray-500 text-sm">Portail Opérationnel</p>
+                </div>
+                <form id="login-form" onsubmit="handleLogin(event)" class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Nom d'utilisateur</label>
+                        <input type="text" id="username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700">Mot de passe</label>
+                        <input type="password" id="password" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                    </div>
+                    <button type="submit" class="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition font-medium">Se connecter</button>
+                    <p id="login-error" class="text-red-500 text-sm text-center mt-2 hidden"></p>
+                </form>
+            </div>
+        </div>
 
-// Configuration de la connexion PostgreSQL (Render ou local)
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
-});
+        <!-- 2. APPLICATION INTERNE (Cachée par défaut) -->
+        <div id="dashboard-screen" class="hidden flex flex-col flex-grow">
+            <!-- Navigation -->
+            <header class="bg-blue-900 text-white shadow">
+                <div class="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
+                    <div class="flex items-center space-x-4">
+                        <h1 class="text-xl font-bold">Portail Cadexair</h1>
+                        <span id="user-badge" class="bg-blue-800 text-xs px-2.5 py-1 rounded-full uppercase tracking-wide"></span>
+                    </div>
+                    <nav class="flex space-x-2">
+                        <button onclick="switchTab('orders')" id="tab-orders" class="px-3 py-2 rounded-lg bg-blue-800 text-sm font-medium transition">Bons de travail</button>
+                        <button onclick="switchTab('schedule')" id="tab-schedule" class="px-3 py-2 rounded-lg hover:bg-blue-800 text-sm font-medium transition">Horaire</button>
+                        <button onclick="switchTab('settings')" id="tab-settings" class="px-3 py-2 rounded-lg hover:bg-blue-800 text-sm font-medium transition">Paramètres</button>
+                        <button onclick="logout()" class="px-3 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-sm font-medium transition ml-4">Déconnexion</button>
+                    </nav>
+                </div>
+            </header>
 
-// Test de connexion et initialisation de la base de données PostgreSQL
-async function initDb() {
-  try {
-    // Table Utilisateurs
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(100) UNIQUE,
-        password_hash TEXT,
-        role VARCHAR(50)
-      )
-    `);
+            <!-- Contenu principal -->
+            <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
 
-    // Table Bons de Travail
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS work_orders (
-        id SERIAL PRIMARY KEY,
-        client_name TEXT,
-        client_address TEXT,
-        appointment_date TEXT,
-        appointment_time TEXT,
-        team_lead_id INTEGER,
-        team_lead_name TEXT,
-        helpers TEXT,
-        work_details TEXT,
-        team_lead_comments TEXT,
-        nb_hottes INTEGER DEFAULT 0,
-        nb_portes INTEGER DEFAULT 0,
-        nb_ventilateurs INTEGER DEFAULT 0,
-        photos_data TEXT,
-        time_entries TEXT,
-        status TEXT DEFAULT 'En attente',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
+                <!-- SECTION : BONS DE TRAVAIL -->
+                <section id="section-orders" class="space-y-6">
+                    <div class="flex justify-between items-center">
+                        <h2 class="text-xl font-bold text-gray-800">Bons de travail en cours</h2>
+                    </div>
+                    <div id="orders-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <!-- Rempli dynamiquement en JS -->
+                    </div>
+                </section>
 
-    console.log('Connecté et tables prêtes sur PostgreSQL (Cadexair).');
+                <!-- SECTION : HORAIRE PDF -->
+                <section id="section-schedule" class="hidden space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Horaire de l'équipe</h2>
+                        
+                        <!-- Zone Upload (Admin / Master uniquement) -->
+                        <div id="admin-schedule-upload" class="mb-6 p-4 bg-gray-50 border border-dashed border-gray-300 rounded-lg hidden">
+                            <label class="block text-sm font-medium text-gray-700 mb-2">Mettre à jour l'horaire (PDF)</label>
+                            <input type="file" id="schedule-file" accept="application/pdf" class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100">
+                            <button onclick="uploadSchedule()" class="mt-3 bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">Téléverser l'horaire</button>
+                        </div>
 
-    // Vérification et création du compte Master par défaut si aucun utilisateur n'existe
-    const userCountResult = await pool.query(`SELECT COUNT(*) as count FROM users`);
-    if (parseInt(userCountResult.rows[0].count) === 0) {
-      const defaultHash = await bcrypt.hash('password123', 10);
-      await pool.query(
-        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['master', defaultHash, 'master']
-      );
-      console.log('Compte Master par défaut créé avec succès.');
-    }
-  } catch (err) {
-    console.error('Erreur d initialisation BDD PostgreSQL:', err.message);
-  }
-}
+                        <!-- Visionneuse PDF -->
+                        <div class="border rounded-lg overflow-hidden h-[600px] bg-gray-200 flex flex-col items-center justify-center" id="schedule-viewer-container">
+                            <p class="text-gray-500 mb-2">Aucun horaire PDF disponible pour le moment.</p>
+                        </div>
+                    </div>
+                </section>
 
-initDb();
+                <!-- SECTION : PARAMÈTRES & CRÉATION DE COMPTE -->
+                <section id="section-settings" class="hidden space-y-6">
+                    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4">Paramètres et Gestion des Utilisateurs</h2>
+                        
+                        <!-- Formulaire de création de compte (Visible pour Master et Admin secondaire) -->
+                        <div id="user-creation-card" class="border-t pt-4 mt-4">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-3">Créer un nouvel utilisateur</h3>
+                            <form id="create-user-form" onsubmit="handleCreateUser(event)" class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Nom complet / Identifiant</label>
+                                    <input type="text" id="new-username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Département</label>
+                                    <input type="text" id="new-department" placeholder="Ex: Ventilation Commerciale" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Mot de passe temporaire</label>
+                                    <input type="password" id="new-password" placeholder="password123" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700">Type de compte (Rôle)</label>
+                                    <select id="new-role" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                        <option value="employe">Chef d'équipe / Technicien</option>
+                                        <option value="admin" id="option-admin-role">Administrateur Secondaire</option>
+                                    </select>
+                                </div>
+                                <button type="submit" class="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition font-medium">Créer le compte</button>
+                                <p id="create-user-msg" class="text-sm text-center mt-2 hidden"></p>
+                            </form>
+                        </div>
+                    </div>
+                </section>
 
-// Middleware de vérification JWT
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Accès non autorisé' });
+            </main>
+        </div>
 
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Token invalide' });
-    req.user = user;
-    next();
-  });
-}
+    </div>
 
-// --- ROUTES API ---
+    <!-- LOGIQUE JAVASCRIPT FRONT-END -->
+    <script>
+        const API_URL = ''; // Même serveur
+        let currentUser = null;
 
-// Connexion
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
-  try {
-    const result = await pool.query(`SELECT * FROM users WHERE username = $1`, [username]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Utilisateur non trouvé' });
+        // Vérifier si un token existe au chargement
+        window.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            const savedUser = localStorage.getItem('user');
+            if (token && savedUser) {
+                currentUser = JSON.parse(savedUser);
+                showDashboard();
+            }
+        });
 
-    const user = result.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return res.status(400).json({ error: 'Mot de passe incorrect' });
+        // Gestion Connexion
+        async function handleLogin(e) {
+            e.preventDefault();
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const errorEl = document.getElementById('login-error');
 
-    const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '8h' }
-    );
-    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+            try {
+                const res = await fetch(`${API_URL}/api/login`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password })
+                });
+                const data = await res.json();
 
-// Liste des utilisateurs
-app.get('/api/users', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT id, username, role FROM users`);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+                if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
 
-// Créer un utilisateur selon la hiérarchie (Master / Admin secondaire / Employé-Chef d'équipe)
-app.post('/api/users', authenticateToken, async (req, res) => {
-  const { username, password, role } = req.body; // role attendu: 'admin' (secondaire) ou 'employe' (chef d'équipe)
-  const currentUser = req.user;
+                localStorage.setItem('token', data.token);
+                localStorage.setItem('user', JSON.stringify(data.user));
+                currentUser = data.user;
+                showDashboard();
+            } catch (err) {
+                errorEl.textContent = err.message;
+                errorEl.classList.remove('hidden');
+            }
+        }
 
-  // RÈGLE 1 : Seul le master peut créer un administrateur secondaire ('admin')
-  if (role === 'admin' && currentUser.role !== 'master') {
-    return res.status(403).json({ error: 'Seul l administrateur master peut créer des administrateurs secondaires.' });
-  }
+        function showDashboard() {
+            document.getElementById('login-screen').classList.add('hidden');
+            document.getElementById('dashboard-screen').classList.remove('hidden');
+            document.getElementById('user-badge').textContent = `${currentUser.username} (${currentUser.role})`;
 
-  // RÈGLE 2 : Seuls les admins ou le master peuvent créer des utilisateurs
-  if (currentUser.role !== 'master' && currentUser.role !== 'admin') {
-    return res.status(403).json({ error: 'Accès refusé. Droits insuffisants pour créer un utilisateur.' });
-  }
+            // Gestion affichage selon rôles pour la création de compte
+            const adminRoleOption = document.getElementById('option-admin-role');
+            if (currentUser.role !== 'master') {
+                if (adminRoleOption) adminRoleOption.style.display = 'none'; // Seul le master peut créer un admin secondaire
+            }
 
-  try {
-    const password_hash = await bcrypt.hash(password || 'password123', 10);
-    const insertQuery = `
-      INSERT INTO users (username, password_hash, role) 
-      VALUES ($1, $2, $3)
-      RETURNING id, username, role
-    `;
-    
-    const result = await pool.query(insertQuery, [username, password_hash, role || 'employe']);
-    res.status(201).json({ message: 'Utilisateur créé avec succès', user: result.rows[0] });
-  } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Ce nom d utilisateur existe déjà.' });
-    }
-    res.status(500).json({ error: err.message });
-  }
-});
+            // Afficher option upload horaire si admin ou master
+            if (currentUser.role === 'master' || currentUser.role === 'admin') {
+                document.getElementById('admin-schedule-upload').classList.remove('hidden');
+            }
 
-// Historique des clients pour préremplissage
-app.get('/api/clients-history', authenticateToken, async (req, res) => {
-  try {
-    const result = await pool.query(`SELECT DISTINCT client_name, client_address, nb_hottes, nb_portes, nb_ventilateurs FROM work_orders`);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+            loadWorkOrders();
+            loadSchedule();
+        }
 
-// Liste des bons de travail
-app.get('/api/work-orders', authenticateToken, async (req, res) => {
-  const { history } = req.query;
-  try {
-    let query = `SELECT * FROM work_orders`;
-    let params = [];
+        function logout() {
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            window.location.reload();
+        }
 
-    if (history === 'true') {
-      query += ` ORDER BY id DESC`;
-    } else if (req.user.role !== 'master' && req.user.role !== 'admin') {
-      query += ` WHERE (team_lead_id = $1 OR helpers LIKE $2) AND status != 'Terminé' ORDER BY id DESC`;
-      params.push(req.user.id, `%${req.user.username}%`);
-    } else {
-      query += ` WHERE status != 'Terminé' ORDER BY id DESC`;
-    }
+        // Navigation par onglets
+        function switchTab(tab) {
+            ['orders', 'schedule', 'settings'].forEach(t => {
+                document.getElementById(`section-${t}`).classList.add('hidden');
+                document.getElementById(`tab-${t}`).classList.remove('bg-blue-800');
+            });
+            document.getElementById(`section-${tab}`).classList.remove('hidden');
+            document.getElementById(`tab-${tab}`).classList.add('bg-blue-800');
+        }
 
-    const result = await pool.query(query, params);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+        // Chargement des bons de travail
+        async function loadWorkOrders() {
+            try {
+                const res = await fetch(`${API_URL}/api/work-orders`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const orders = await res.json();
+                const listEl = document.getElementById('orders-list');
+                listEl.innerHTML = '';
 
-// Créer un bon de travail (Réservé aux Admins et au Master)
-app.post('/api/work-orders', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'master' && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Réservé aux administrateurs' });
-  }
+                if (orders.length === 0) {
+                    listEl.innerHTML = '<p class="text-gray-500 col-span-2">Aucun bon de travail en attente.</p>';
+                    return;
+                }
 
-  const {
-    client_name, client_address, appointment_date, appointment_time,
-    team_lead_id, helpers, work_details, nb_hottes, nb_portes, nb_ventilateurs
-  } = req.body;
+                orders.forEach(o => {
+                    listEl.innerHTML += `
+                        <div class="bg-white p-5 rounded-xl shadow space-y-2">
+                            <div class="flex justify-between items-start">
+                                <h3 class="font-bold text-lg text-blue-900">${o.client_name}</h3>
+                                <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">${o.status}</span>
+                            </div>
+                            <p class="text-sm text-gray-600"><strong>Adresse :</strong> ${o.client_address}</p>
+                            <p class="text-sm text-gray-600"><strong>Chef d'équipe :</strong> ${o.team_lead_name}</p>
+                            <p class="text-sm text-gray-600"><strong>Date :</strong> ${o.appointment_date} à ${o.appointment_time}</p>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error('Erreur chargement bons de travail', err);
+            }
+        }
 
-  try {
-    const userResult = await pool.query(`SELECT username FROM users WHERE id = $1`, [team_lead_id]);
-    const team_lead_name = userResult.rows.length > 0 ? userResult.rows[0].username : 'Inconnu';
+        // Création d'utilisateur
+        async function handleCreateUser(e) {
+            e.preventDefault();
+            const username = document.getElementById('new-username').value;
+            const department = document.getElementById('new-department').value;
+            const password = document.getElementById('new-password').value;
+            const role = document.getElementById('new-role').value;
+            const msgEl = document.getElementById('create-user-msg');
 
-    const insertQuery = `
-      INSERT INTO work_orders 
-      (client_name, client_address, appointment_date, appointment_time, team_lead_id, team_lead_name, helpers, work_details, team_lead_comments, nb_hottes, nb_portes, nb_ventilateurs, photos_data, time_entries, status) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      RETURNING id
-    `;
+            try {
+                const res = await fetch(`${API_URL}/api/users`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    },
+                    body: JSON.stringify({ username, department, password, role })
+                });
+                const data = await res.json();
 
-    const values = [
-      client_name, client_address, appointment_date, appointment_time,
-      team_lead_id, team_lead_name, JSON.stringify(helpers || []), work_details, '',
-      nb_hottes || 0, nb_portes || 0, nb_ventilateurs || 0,
-      '{}', '{}', 'En attente'
-    ];
+                if (!res.ok) throw new Error(data.error || 'Erreur lors de la création');
 
-    const result = await pool.query(insertQuery, values);
-    res.status(201).json({ id: result.rows[0].id, client_name });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
+                msgEl.textContent = 'Utilisateur créé avec succès !';
+                msgEl.classList.remove('hidden', 'text-red-500');
+                msgEl.classList.add('text-green-600');
+                document.getElementById('create-user-form').reset();
+            } catch (err) {
+                msgEl.textContent = err.message;
+                msgEl.classList.remove('hidden', 'text-green-600');
+                msgEl.classList.add('text-red-500');
+            }
+        }
 
-// Mettre à jour un bon de travail
-app.patch('/api/work-orders/:id', authenticateToken, async (req, res) => {
-  const { photos_data, time_entries, team_lead_comments, status } = req.body;
-  const orderId = req.params.id;
+        // Gestion Horaire PDF (Simulation / Stockage local ou API selon extension future)
+        function uploadSchedule() {
+            const fileInput = document.getElementById('schedule-file');
+            if (fileInput.files.length === 0) return alert('Veuillez sélectionner un fichier PDF.');
+            
+            const file = fileInput.files[0];
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                localStorage.setItem('cadexair_schedule', e.target.result);
+                loadSchedule();
+                alert('Horaire mis à jour avec succès !');
+            };
+            reader.readAsDataURL(file);
+        }
 
-  try {
-    const updateQuery = `
-      UPDATE work_orders SET 
-        photos_data = COALESCE($1, photos_data),
-        time_entries = COALESCE($2, time_entries),
-        team_lead_comments = COALESCE($3, team_lead_comments),
-        status = COALESCE($4, status)
-       WHERE id = $5
-    `;
+        function loadSchedule() {
+            const container = document.getElementById('schedule-viewer-container');
+            const savedPdf = localStorage.getItem('cadexair_schedule');
 
-    const values = [
-      photos_data ? JSON.stringify(photos_data) : null,
-      time_entries ? JSON.stringify(time_entries) : null,
-      team_lead_comments !== undefined ? team_lead_comments : null,
-      status || null,
-      orderId
-    ];
-
-    await pool.query(updateQuery, values);
-    res.json({ message: 'Bon de travail mis à jour avec succès' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Redirection vers le frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
-
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Serveur Cadexair en ligne sur le port ${PORT}`);
-});
+            if (savedPdf) {
+                container.innerHTML = `
+                    <iframe src="${savedPdf}" class="w-full h-full" frameborder="0"></iframe>
+                    <div class="p-3 bg-white w-full border-t flex justify-end">
+                        <a href="${savedPdf}" download="Horaire_Cadexair.pdf" class="bg-blue-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-800">Télécharger l'horaire PDF</a>
+                    </div>
+                `;
+            }
+        }
+    </script>
+</body>
+</html>
