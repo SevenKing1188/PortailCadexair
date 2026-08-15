@@ -30,7 +30,6 @@ async function initDb() {
         id SERIAL PRIMARY KEY,
         username VARCHAR(100) UNIQUE,
         password_hash TEXT,
-        department VARCHAR(100),
         role VARCHAR(50)
       )
     `);
@@ -60,18 +59,23 @@ async function initDb() {
 
     console.log('Connecté et tables prêtes sur PostgreSQL (Cadexair).');
 
-    // Vérification et création du compte Master sécurisé par défaut si aucun utilisateur n'existe
+    // Vérification et création des comptes par défaut
     const userCountResult = await pool.query(`SELECT COUNT(*) as count FROM users`);
     if (parseInt(userCountResult.rows[0].count) === 0) {
-      // Hachage sécurisé du mot de passe avec bcrypt (10 rounds)
-      const secureMasterPassword = '!h-6YgzY:4eFNMw';
-      const defaultHash = await bcrypt.hash(secureMasterPassword, 10);
-      
+      const defaultHash = await bcrypt.hash('password123', 10);
       await pool.query(
-        `INSERT INTO users (username, password_hash, department, role) VALUES ($1, $2, $3, $4)`,
-        ['MasterSystem', defaultHash, 'Direction Générale', 'master']
+        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
+        ['admin', defaultHash, 'admin']
       );
-      console.log('Compte MasterSystem créé avec succès et sécurisé.');
+      await pool.query(
+        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
+        ['employe1', defaultHash, 'employe']
+      );
+      await pool.query(
+        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
+        ['employe2', defaultHash, 'employe']
+      );
+      console.log('Comptes par défaut créés avec succès.');
     }
   } catch (err) {
     console.error('Erreur d initialisation BDD PostgreSQL:', err.message);
@@ -95,7 +99,7 @@ function authenticateToken(req, res, next) {
 
 // --- ROUTES API ---
 
-// Connexion sécurisée
+// Connexion
 app.post('/api/login', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -120,72 +124,8 @@ app.post('/api/login', async (req, res) => {
 // Liste des utilisateurs
 app.get('/api/users', authenticateToken, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT id, username, department, role FROM users`);
+    const result = await pool.query(`SELECT id, username, role FROM users`);
     res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Créer un utilisateur (Maîtrisé par le master ou les admins secondaires)
-app.post('/api/users', authenticateToken, async (req, res) => {
-  const { username, password, department, role } = req.body; 
-  const currentUser = req.user;
-
-  // RÈGLE 1 : Seul le master peut créer un administrateur secondaire ('admin')
-  if (role === 'admin' && currentUser.role !== 'master') {
-    return res.status(403).json({ error: 'Seul l administrateur master peut créer des administrateurs secondaires.' });
-  }
-
-  // RÈGLE 2 : Seuls les admins ou le master peuvent créer des utilisateurs
-  if (currentUser.role !== 'master' && currentUser.role !== 'admin') {
-    return res.status(403).json({ error: 'Accès refusé. Droits insuffisants pour créer un utilisateur.' });
-  }
-
-  try {
-    const password_hash = await bcrypt.hash(password || 'password123', 10);
-    const insertQuery = `
-      INSERT INTO users (username, password_hash, department, role) 
-      VALUES ($1, $2, $3, $4)
-      RETURNING id, username, department, role
-    `;
-    
-    const result = await pool.query(insertQuery, [username, password_hash, department || 'Général', role || 'employe']);
-    res.status(201).json({ message: 'Utilisateur créé avec succès', user: result.rows[0] });
-  } catch (err) {
-    if (err.code === '23505') {
-      return res.status(400).json({ error: 'Ce nom d utilisateur existe déjà.' });
-    }
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// Supprimer un utilisateur (Plein pouvoir pour le master)
-app.delete('/api/users/:id', authenticateToken, async (req, res) => {
-  const targetUserId = req.params.id;
-  const currentUser = req.user;
-
-  try {
-    const targetResult = await pool.query(`SELECT * FROM users WHERE id = $1`, [targetUserId]);
-    if (targetResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Utilisateur non trouvé.' });
-    }
-    const targetUser = targetResult.rows[0];
-
-    if (currentUser.role === 'master') {
-      if (targetUser.id === currentUser.id) {
-        return res.status(400).json({ error: 'Vous ne pouvez pas supprimer votre propre compte master.' });
-      }
-    } else if (currentUser.role === 'admin') {
-      if (targetUser.role === 'master' || targetUser.role === 'admin') {
-        return res.status(403).json({ error: 'Un administrateur secondaire ne peut pas supprimer un administrateur ou un master.' });
-      }
-    } else {
-      return res.status(403).json({ error: 'Accès refusé.' });
-    }
-
-    await pool.query(`DELETE FROM users WHERE id = $1`, [targetUserId]);
-    res.json({ message: 'Utilisateur supprimé avec succès.' });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -210,11 +150,11 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
 
     if (history === 'true') {
       query += ` ORDER BY id DESC`;
-    } else if (req.user.role === 'master' || req.user.role === 'admin') {
-      query += ` WHERE status != 'Terminé' ORDER BY id DESC`;
-    } else {
+    } else if (req.user.role !== 'admin') {
       query += ` WHERE (team_lead_id = $1 OR helpers LIKE $2) AND status != 'Terminé' ORDER BY id DESC`;
       params.push(req.user.id, `%${req.user.username}%`);
+    } else {
+      query += ` WHERE status != 'Terminé' ORDER BY id DESC`;
     }
 
     const result = await pool.query(query, params);
@@ -224,11 +164,9 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// Créer un bon de travail (Réservé aux Admins et au Master)
+// Créer un bon de travail (Admin)
 app.post('/api/work-orders', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'master' && req.user.role !== 'admin') {
-    return res.status(403).json({ error: 'Réservé aux administrateurs' });
-  }
+  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Réservé aux admins' });
 
   const {
     client_name, client_address, appointment_date, appointment_time,
