@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portail Cadexair</title>
-    <!-- Tailwind CSS pour un design propre et rapide -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 min-h-screen font-sans">
@@ -61,7 +61,7 @@
                         <h2 class="text-xl font-bold text-gray-800">Bons de travail en cours</h2>
                     </div>
                     <div id="orders-list" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <!-- Rempli dynamiquement en JS -->
+                        <!-- Rempli dynamiquement -->
                     </div>
                 </section>
 
@@ -84,37 +84,47 @@
                     </div>
                 </section>
 
-                <!-- SECTION : PARAMÈTRES & CRÉATION DE COMPTE -->
+                <!-- SECTION : PARAMÈTRES & GESTION DES UTILISATEURS -->
                 <section id="section-settings" class="hidden space-y-6">
-                    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto">
-                        <h2 class="text-xl font-bold text-gray-800 mb-4">Paramètres et Gestion des Utilisateurs</h2>
-                        
-                        <!-- Formulaire de création de compte (Visible pour Master et Admin secondaire) -->
-                        <div id="user-creation-card" class="border-t pt-4 mt-4">
-                            <h3 class="text-lg font-semibold text-gray-700 mb-3">Créer un nouvel utilisateur</h3>
-                            <form id="create-user-form" onsubmit="handleCreateUser(event)" class="space-y-4">
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Nom complet / Identifiant</label>
-                                    <input type="text" id="new-username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Département</label>
-                                    <input type="text" id="new-department" placeholder="Ex: Ventilation Commerciale" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Mot de passe temporaire</label>
-                                    <input type="password" id="new-password" placeholder="password123" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                </div>
-                                <div>
-                                    <label class="block text-sm font-medium text-gray-700">Type de compte (Rôle)</label>
-                                    <select id="new-role" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
-                                        <option value="employe">Chef d'équipe / Technicien</option>
-                                        <option value="admin" id="option-admin-role">Administrateur Secondaire</option>
-                                    </select>
-                                </div>
-                                <button type="submit" class="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition font-medium">Créer le compte</button>
-                                <p id="create-user-msg" class="text-sm text-center mt-2 hidden"></p>
-                            </form>
+                    <div class="bg-white p-6 rounded-xl shadow max-w-2xl mx-auto space-y-8">
+                        <div>
+                            <h2 class="text-xl font-bold text-gray-800 mb-4">Paramètres et Gestion des Utilisateurs</h2>
+                            
+                            <!-- Formulaire de création de compte -->
+                            <div id="user-creation-card" class="border-t pt-4">
+                                <h3 class="text-lg font-semibold text-gray-700 mb-3">Créer un nouvel utilisateur</h3>
+                                <form id="create-user-form" onsubmit="handleCreateUser(event)" class="space-y-4">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Nom d'utilisateur</label>
+                                        <input type="text" id="new-username" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Département</label>
+                                        <input type="text" id="new-department" placeholder="Ex: Ventilation" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Mot de passe temporaire</label>
+                                        <input type="password" id="new-password" placeholder="password123" required class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Type de compte (Rôle)</label>
+                                        <select id="new-role" class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-lg shadow-sm focus:ring-blue-500 focus:border-blue-500">
+                                            <option value="employe">Chef d'équipe / Technicien</option>
+                                            <option value="admin" id="option-admin-role">Administrateur Secondaire</option>
+                                        </select>
+                                    </div>
+                                    <button type="submit" class="w-full bg-blue-900 text-white py-2 px-4 rounded-lg hover:bg-blue-800 transition font-medium">Créer le compte</button>
+                                    <p id="create-user-msg" class="text-sm text-center mt-2 hidden"></p>
+                                </form>
+                            </div>
+                        </div>
+
+                        <!-- Liste des utilisateurs existants (Pour suppression par le master/admin) -->
+                        <div class="border-t pt-6">
+                            <h3 class="text-lg font-semibold text-gray-700 mb-3">Liste des utilisateurs enregistrés</h3>
+                            <div id="users-list-container" class="space-y-2 max-h-60 overflow-y-auto">
+                                <!-- Rempli dynamiquement -->
+                            </div>
                         </div>
                     </div>
                 </section>
@@ -126,10 +136,9 @@
 
     <!-- LOGIQUE JAVASCRIPT FRONT-END -->
     <script>
-        const API_URL = ''; // Même serveur
+        const API_URL = '';
         let currentUser = null;
 
-        // Vérifier si un token existe au chargement
         window.addEventListener('DOMContentLoaded', () => {
             const token = localStorage.getItem('token');
             const savedUser = localStorage.getItem('user');
@@ -139,7 +148,6 @@
             }
         });
 
-        // Gestion Connexion
         async function handleLogin(e) {
             e.preventDefault();
             const username = document.getElementById('username').value;
@@ -153,7 +161,6 @@
                     body: JSON.stringify({ username, password })
                 });
                 const data = await res.json();
-
                 if (!res.ok) throw new Error(data.error || 'Erreur de connexion');
 
                 localStorage.setItem('token', data.token);
@@ -171,28 +178,27 @@
             document.getElementById('dashboard-screen').classList.remove('hidden');
             document.getElementById('user-badge').textContent = `${currentUser.username} (${currentUser.role})`;
 
-            // Gestion affichage selon rôles pour la création de compte
+            // Gestion option admin secondaire : Seul le master peut en créer
             const adminRoleOption = document.getElementById('option-admin-role');
             if (currentUser.role !== 'master') {
-                if (adminRoleOption) adminRoleOption.style.display = 'none'; // Seul le master peut créer un admin secondaire
+                if (adminRoleOption) adminRoleOption.style.display = 'none';
             }
 
-            // Afficher option upload horaire si admin ou master
+            // Gestion affichage upload horaire
             if (currentUser.role === 'master' || currentUser.role === 'admin') {
                 document.getElementById('admin-schedule-upload').classList.remove('hidden');
             }
 
             loadWorkOrders();
             loadSchedule();
+            loadUsersList();
         }
 
         function logout() {
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
+            localStorage.clear();
             window.location.reload();
         }
 
-        // Navigation par onglets
         function switchTab(tab) {
             ['orders', 'schedule', 'settings'].forEach(t => {
                 document.getElementById(`section-${t}`).classList.add('hidden');
@@ -202,7 +208,6 @@
             document.getElementById(`tab-${tab}`).classList.add('bg-blue-800');
         }
 
-        // Chargement des bons de travail
         async function loadWorkOrders() {
             try {
                 const res = await fetch(`${API_URL}/api/work-orders`, {
@@ -219,7 +224,7 @@
 
                 orders.forEach(o => {
                     listEl.innerHTML += `
-                        <div class="bg-white p-5 rounded-xl shadow space-y-2">
+                        <div class="bg-white p-5 rounded-xl shadow space-y-2 border">
                             <div class="flex justify-between items-start">
                                 <h3 class="font-bold text-lg text-blue-900">${o.client_name}</h3>
                                 <span class="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded">${o.status}</span>
@@ -235,7 +240,6 @@
             }
         }
 
-        // Création d'utilisateur
         async function handleCreateUser(e) {
             e.preventDefault();
             const username = document.getElementById('new-username').value;
@@ -254,13 +258,13 @@
                     body: JSON.stringify({ username, department, password, role })
                 });
                 const data = await res.json();
-
                 if (!res.ok) throw new Error(data.error || 'Erreur lors de la création');
 
                 msgEl.textContent = 'Utilisateur créé avec succès !';
                 msgEl.classList.remove('hidden', 'text-red-500');
                 msgEl.classList.add('text-green-600');
                 document.getElementById('create-user-form').reset();
+                loadUsersList();
             } catch (err) {
                 msgEl.textContent = err.message;
                 msgEl.classList.remove('hidden', 'text-green-600');
@@ -268,7 +272,48 @@
             }
         }
 
-        // Gestion Horaire PDF (Simulation / Stockage local ou API selon extension future)
+        async function loadUsersList() {
+            try {
+                const res = await fetch(`${API_URL}/api/users`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const users = await res.json();
+                const container = document.getElementById('users-list-container');
+                container.innerHTML = '';
+
+                users.forEach(u => {
+                    container.innerHTML += `
+                        <div class="flex justify-between items-center p-3 bg-gray-50 rounded-lg border text-sm">
+                            <div>
+                                <span class="font-bold">${u.username}</span> 
+                                <span class="text-gray-500 text-xs">(${u.department || 'Général'} - ${u.role})</span>
+                            </div>
+                            ${(currentUser.role === 'master' || (currentUser.role === 'admin' && u.role === 'employe')) ? 
+                                `<button onclick="deleteUser(${u.id})" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600 text-xs font-medium">Supprimer</button>` 
+                                : ''}
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error('Erreur chargement utilisateurs', err);
+            }
+        }
+
+        async function deleteUser(id) {
+            if (!confirm('Voulez-vous vraiment supprimer cet utilisateur ?')) return;
+            try {
+                const res = await fetch(`${API_URL}/api/users/${id}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('token')}` }
+                });
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.error || 'Erreur lors de la suppression');
+                loadUsersList();
+            } catch (err) {
+                alert(err.message);
+            }
+        }
+
         function uploadSchedule() {
             const fileInput = document.getElementById('schedule-file');
             if (fileInput.files.length === 0) return alert('Veuillez sélectionner un fichier PDF.');
