@@ -66,7 +66,7 @@ async function initDb() {
       await pool.query(
   
         `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-         ['adminmaster', defaultHash, 'admin']
+         ['adminmaster', defaultHash, 'adminmaster']
         );
       console.log('Comptes par défaut créés avec succès.');
     }
