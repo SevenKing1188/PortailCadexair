@@ -64,17 +64,10 @@ async function initDb() {
     if (parseInt(userCountResult.rows[0].count) === 0) {
       const defaultHash = await bcrypt.hash('password123', 10);
       await pool.query(
+  
         `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['admin', defaultHash, 'admin']
-      );
-      await pool.query(
-        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['employe1', defaultHash, 'employe']
-      );
-      await pool.query(
-        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-        ['employe2', defaultHash, 'employe']
-      );
+         ['adminmaster', defaultHash, 'admin']
+        );
       console.log('Comptes par défaut créés avec succès.');
     }
   } catch (err) {
