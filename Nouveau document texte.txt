@@ -1,0 +1,11 @@
+SUPABASE_URL = https://mnhwgndkxrgmidomdlyy.supabase.co
+SUPABASE_ANON_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uaHdnbmRreHJnbWlkb21kbHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NTE0ODcsImV4cCI6MjEwMjAyNzQ4N30.RQcFGRK_N7nYUfrw-pW-CXkG1vTTEaAy6fEoSPNvcqc
+SUPABASE_SERVICE_KEY = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uaHdnbmRreHJnbWlkb21kbHl5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc4NjQ1MTQ4NywiZXhwIjoyMTAyMDI3NDg3fQ.FETh7vyBMHY6qFvWt4S_Sy3Cv1GZ_kAHRa0TnnnKmio
+
+
+
+3. JWT_SECRET = MySecretKey123ChangeMe
+4. MASTER_PASSWORD = MasterPass123ChangeMe
+5. NODE_ENV = production
+6. API_URL = https://portail-cadexair.onrender.com
+7. PORT = 3000

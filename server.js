@@ -1,231 +1,475 @@
+// ============================================
+// API EXPRESS - Portail Cadexair v3.0
+// ============================================
+
+require('dotenv').config();
 const express = require('express');
 const cors = require('cors');
+const { createClient } = require('@supabase/supabase-js');
 const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
-const path = require('path');
-const { Pool } = require('pg');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
-const JWT_SECRET = process.env.JWT_SECRET || 'cadexair-secret-key-2026';
+const PORT = process.env.PORT || 3000;
 
-// Augmentation de la limite pour recevoir les photos en base64
+// ============================================
+// SUPABASE CLIENT
+// ============================================
+
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_KEY
+);
+
+// ============================================
+// MIDDLEWARE
+// ============================================
+
 app.use(cors());
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ limit: '50mb', extended: true }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.json());
 
-// Configuration de la connexion PostgreSQL (Render ou local)
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: process.env.DATABASE_URL ? { rejectUnauthorized: false } : false
+// Middleware Auth JWT
+const authMiddleware = async (req, res, next) => {
+  const token = req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'Token manquant' });
+
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.user = decoded;
+    
+    // Récupère rôle depuis DB
+    const { data: user } = await supabase
+      .from('utilisateurs')
+      .select('role')
+      .eq('id', decoded.id)
+      .single();
+    
+    req.user.role = user?.role;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: 'Token invalide' });
+  }
+};
+
+// Middleware Rôle Master
+const masterOnly = (req, res, next) => {
+  if (req.user.role !== 'master') {
+    return res.status(403).json({ error: 'Accès Master uniquement' });
+  }
+  next();
+};
+
+// Middleware Rôle Master/Admin
+const adminOrMaster = (req, res, next) => {
+  if (!['master', 'admin_secondaire'].includes(req.user.role)) {
+    return res.status(403).json({ error: 'Accès Admin/Master required' });
+  }
+  next();
+};
+
+// ============================================
+// ROUTES ADMIN SETUP (Initialisation)
+// ============================================
+
+app.post('/api/admin/create-master', async (req, res) => {
+  const { email, nom, password } = req.body;
+
+  // Vérification basique
+  if (!email || !nom || !password) {
+    return res.status(400).json({ error: 'Email, nom et mot de passe requis' });
+  }
+
+  if (password.length < 12) {
+    return res.status(400).json({ error: 'Mot de passe minimum 12 caractères' });
+  }
+
+  try {
+    // 1. Vérifier s'il existe déjà un master
+    const { data: existingMaster } = await supabase
+      .from('utilisateurs')
+      .select('id')
+      .eq('role', 'master')
+      .single();
+
+    if (existingMaster) {
+      return res.status(403).json({ error: 'Un master existe déjà. Cette opération ne peut être effectuée qu\'une fois.' });
+    }
+
+    // 2. Créer utilisateur Supabase Auth
+    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
+    if (authError) throw authError;
+
+    // 3. Insérer dans DB avec rôle master
+    const { data, error } = await supabase
+      .from('utilisateurs')
+      .insert({
+        id: authUser.user.id,
+        email,
+        nom,
+        role: 'master',
+        departement: 'Admin',
+        created_by: authUser.user.id
+      })
+      .select();
+
+    if (error) throw error;
+
+    res.status(201).json({ 
+      message: 'Master créé avec succès',
+      user: data[0]
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
-// Test de connexion et initialisation de la base de données PostgreSQL
-async function initDb() {
-  try {
-    // Table Utilisateurs
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS users (
-        id SERIAL PRIMARY KEY,
-        username VARCHAR(100) UNIQUE,
-        password_hash TEXT,
-        role VARCHAR(50)
-      )
-    `);
+// ============================================
+// ROUTES AUTH (Login)
+// ============================================
 
-    // Table Bons de Travail
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS work_orders (
-        id SERIAL PRIMARY KEY,
-        client_name TEXT,
-        client_address TEXT,
-        appointment_date TEXT,
-        appointment_time TEXT,
-        team_lead_id INTEGER,
-        team_lead_name TEXT,
-        helpers TEXT,
-        work_details TEXT,
-        team_lead_comments TEXT,
-        nb_hottes INTEGER DEFAULT 0,
-        nb_portes INTEGER DEFAULT 0,
-        nb_ventilateurs INTEGER DEFAULT 0,
-        photos_data TEXT,
-        time_entries TEXT,
-        status TEXT DEFAULT 'En attente',
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-      )
-    `);
-
-    console.log('Connecté et tables prêtes sur PostgreSQL (Cadexair).');
-
-    // Vérification et création des comptes par défaut
-    const userCountResult = await pool.query(`SELECT COUNT(*) as count FROM users`);
-    if (parseInt(userCountResult.rows[0].count) === 0) {
-      const defaultHash = await bcrypt.hash('password123', 10);
-      await pool.query(
+app.post('/api/auth/login', async (req, res) => {
+  const { email, password } = req.body;
   
-        `INSERT INTO users (username, password_hash, role) VALUES ($1, $2, $3)`,
-         ['adminmaster', defaultHash, 'adminmaster']
-        );
-      console.log('Comptes par défaut créés avec succès.');
-    }
-  } catch (err) {
-    console.error('Erreur d initialisation BDD PostgreSQL:', err.message);
-  }
-}
-
-initDb();
-
-// Middleware de vérification JWT
-function authenticateToken(req, res, next) {
-  const authHeader = req.headers['authorization'];
-  const token = authHeader && authHeader.split(' ')[1];
-  if (!token) return res.status(401).json({ error: 'Accès non autorisé' });
-
-  jwt.verify(token, JWT_SECRET, (err, user) => {
-    if (err) return res.status(403).json({ error: 'Token invalide' });
-    req.user = user;
-    next();
-  });
-}
-
-// --- ROUTES API ---
-
-// Connexion
-app.post('/api/login', async (req, res) => {
-  const { username, password } = req.body;
   try {
-    const result = await pool.query(`SELECT * FROM users WHERE username = $1`, [username]);
-    if (result.rows.length === 0) return res.status(400).json({ error: 'Utilisateur non trouvé' });
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
 
-    const user = result.rows[0];
-    const validPassword = await bcrypt.compare(password, user.password_hash);
-    if (!validPassword) return res.status(400).json({ error: 'Mot de passe incorrect' });
+    if (error) throw error;
+
+    const { data: user } = await supabase
+      .from('utilisateurs')
+      .select('id, email, nom, role')
+      .eq('id', data.user.id)
+      .single();
 
     const token = jwt.sign(
-      { id: user.id, username: user.username, role: user.role },
-      JWT_SECRET,
-      { expiresIn: '8h' }
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '24h' }
     );
-    res.json({ token, user: { id: user.id, username: user.username, role: user.role } });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+
+    res.json({ token, user });
+  } catch (error) {
+    res.status(401).json({ error: error.message });
   }
 });
 
-// Liste des utilisateurs
-app.get('/api/users', authenticateToken, async (req, res) => {
+// ============================================
+// ROUTES UTILISATEURS (Master/Admin)
+// ============================================
+
+// GET: Tous les utilisateurs
+app.get('/api/utilisateurs', authMiddleware, adminOrMaster, async (req, res) => {
   try {
-    const result = await pool.query(`SELECT id, username, role FROM users`);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const { data, error } = await supabase
+      .from('utilisateurs')
+      .select('id, email, nom, role, departement, actif, created_at')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Historique des clients pour préremplissage
-app.get('/api/clients-history', authenticateToken, async (req, res) => {
+// POST: Créer utilisateur (Admin/Master)
+app.post('/api/utilisateurs', authMiddleware, adminOrMaster, async (req, res) => {
+  const { email, password, nom, role, departement } = req.body;
+
+  // Master seul peut créer admin_secondaire
+  if (role === 'admin_secondaire' && req.user.role !== 'master') {
+    return res.status(403).json({ error: 'Seul Master crée les admins secondaires' });
+  }
+
   try {
-    const result = await pool.query(`SELECT DISTINCT client_name, client_address, nb_hottes, nb_portes, nb_ventilateurs FROM work_orders`);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    // 1. Créer utilisateur Supabase Auth
+    const { data: authUser, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
+    if (authError) throw authError;
+
+    // 2. Insérer dans DB
+    const { data, error } = await supabase
+      .from('utilisateurs')
+      .insert({
+        id: authUser.user.id,
+        email,
+        nom,
+        role,
+        departement,
+        created_by: req.user.id
+      })
+      .select();
+
+    if (error) throw error;
+    res.status(201).json(data[0]);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
-// Liste des bons de travail
-app.get('/api/work-orders', authenticateToken, async (req, res) => {
-  const { history } = req.query;
-  try {
-    let query = `SELECT * FROM work_orders`;
-    let params = [];
+// DELETE: Supprimer utilisateur (Master/Admin)
+app.delete('/api/utilisateurs/:id', authMiddleware, adminOrMaster, async (req, res) => {
+  const { id } = req.params;
 
-    if (history === 'true') {
-      query += ` ORDER BY id DESC`;
-    } else if (req.user.role !== 'admin') {
-      query += ` WHERE (team_lead_id = $1 OR helpers LIKE $2) AND status != 'Terminé' ORDER BY id DESC`;
-      params.push(req.user.id, `%${req.user.username}%`);
-    } else {
-      query += ` WHERE status != 'Terminé' ORDER BY id DESC`;
+  // Vérifier rôle cible
+  const { data: targetUser } = await supabase
+    .from('utilisateurs')
+    .select('role')
+    .eq('id', id)
+    .single();
+
+  // Master seul peut supprimer admin_secondaire
+  if (targetUser.role === 'admin_secondaire' && req.user.role !== 'master') {
+    return res.status(403).json({ error: 'Seul Master supprime les admins secondaires' });
+  }
+
+  try {
+    // Supprimer de Supabase Auth
+    await supabase.auth.admin.deleteUser(id);
+
+    // Supprimer de DB
+    const { error } = await supabase
+      .from('utilisateurs')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ message: 'Utilisateur supprimé' });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ============================================
+// ROUTES BONS DE TRAVAIL
+// ============================================
+
+// GET: Tous les bons (avec filtres)
+app.get('/api/bons', authMiddleware, async (req, res) => {
+  try {
+    const { statut, chef_id, mois } = req.query;
+    let query = supabase.from('bons_travail').select('*');
+
+    if (statut) query = query.eq('statut', statut);
+    if (chef_id) query = query.eq('chef_equipe_id', chef_id);
+    if (mois) {
+      const [year, month] = mois.split('-');
+      query = query.gte('date_intervention', `${year}-${month}-01`)
+               .lt('date_intervention', `${year}-${month}-32`);
     }
 
-    const result = await pool.query(query, params);
-    res.json(result.rows);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    const { data, error } = await query.order('date_intervention', { ascending: false });
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
   }
 });
 
-// Créer un bon de travail (Admin)
-app.post('/api/work-orders', authenticateToken, async (req, res) => {
-  if (req.user.role !== 'admin') return res.status(403).json({ error: 'Réservé aux admins' });
+// GET: Détail bon + historique
+app.get('/api/bons/:id', authMiddleware, async (req, res) => {
+  try {
+    const { data: bon, error: errBon } = await supabase
+      .from('bons_travail')
+      .select('*')
+      .eq('id', req.params.id)
+      .single();
 
-  const {
-    client_name, client_address, appointment_date, appointment_time,
-    team_lead_id, helpers, work_details, nb_hottes, nb_portes, nb_ventilateurs
-  } = req.body;
+    if (errBon) throw errBon;
+
+    const { data: historique, error: errHist } = await supabase
+      .from('historique_bons')
+      .select(`
+        *,
+        changed_by:utilisateurs(nom)
+      `)
+      .eq('bon_id', req.params.id)
+      .order('changed_at', { ascending: false });
+
+    if (errHist) throw errHist;
+
+    res.json({ bon, historique });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST: Créer bon (Chef/Admin)
+app.post('/api/bons', authMiddleware, adminOrMaster, async (req, res) => {
+  const { numero, client_nom, client_adresse, date_intervention, chef_equipe_id } = req.body;
 
   try {
-    const userResult = await pool.query(`SELECT username FROM users WHERE id = $1`, [team_lead_id]);
-    const team_lead_name = userResult.rows.length > 0 ? userResult.rows[0].username : 'Inconnu';
+    const { data, error } = await supabase
+      .from('bons_travail')
+      .insert({
+        numero,
+        client_nom,
+        client_adresse,
+        date_intervention,
+        chef_equipe_id,
+        created_by: req.user.id
+      })
+      .select();
 
-    const insertQuery = `
-      INSERT INTO work_orders 
-      (client_name, client_address, appointment_date, appointment_time, team_lead_id, team_lead_name, helpers, work_details, team_lead_comments, nb_hottes, nb_portes, nb_ventilateurs, photos_data, time_entries, status) 
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
-      RETURNING id
-    `;
-
-    const values = [
-      client_name, client_address, appointment_date, appointment_time,
-      team_lead_id, team_lead_name, JSON.stringify(helpers || []), work_details, '',
-      nb_hottes || 0, nb_portes || 0, nb_ventilateurs || 0,
-      '{}', '{}', 'En attente'
-    ];
-
-    const result = await pool.query(insertQuery, values);
-    res.status(201).json({ id: result.rows[0].id, client_name });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (error) throw error;
+    res.status(201).json(data[0]);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
-// Mettre à jour un bon de travail
-app.patch('/api/work-orders/:id', authenticateToken, async (req, res) => {
-  const { photos_data, time_entries, team_lead_comments, status } = req.body;
-  const orderId = req.params.id;
+// PATCH: Assigner/Modifier bon
+app.patch('/api/bons/:id', authMiddleware, adminOrMaster, async (req, res) => {
+  const { id } = req.params;
+  const { statut, chef_equipe_id, techniciens_ids, notes_travail, heure_arrivee, heure_depart } = req.body;
 
   try {
-    const updateQuery = `
-      UPDATE work_orders SET 
-        photos_data = COALESCE($1, photos_data),
-        time_entries = COALESCE($2, time_entries),
-        team_lead_comments = COALESCE($3, team_lead_comments),
-        status = COALESCE($4, status)
-       WHERE id = $5
-    `;
+    const { data, error } = await supabase
+      .from('bons_travail')
+      .update({
+        statut,
+        chef_equipe_id,
+        techniciens_ids,
+        notes_travail,
+        heure_arrivee,
+        heure_depart,
+        updated_by: req.user.id,
+        updated_at: new Date()
+      })
+      .eq('id', id)
+      .select();
 
-    const values = [
-      photos_data ? JSON.stringify(photos_data) : null,
-      time_entries ? JSON.stringify(time_entries) : null,
-      team_lead_comments !== undefined ? team_lead_comments : null,
-      status || null,
-      orderId
-    ];
-
-    await pool.query(updateQuery, values);
-    res.json({ message: 'Bon de travail mis à jour avec succès' });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (error) throw error;
+    res.json(data[0]);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
   }
 });
 
-// Redirection vers le frontend
-app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+// ============================================
+// ROUTES ÉVÉNEMENTS (Bannière)
+// ============================================
+
+// GET: Événements actuels
+app.get('/api/evenements', async (req, res) => {
+  try {
+    const now = new Date().toISOString();
+    const { data, error } = await supabase
+      .from('evenements')
+      .select(`
+        *,
+        created_by:utilisateurs(nom)
+      `)
+      .eq('visible_a_tous', true)
+      .lte('date_debut', now)
+      .gte('date_fin', now)
+      .order('priorite', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`Serveur Cadexair en ligne sur le port ${PORT}`);
+// POST: Créer événement (Admin seulement)
+app.post('/api/evenements', authMiddleware, adminOrMaster, async (req, res) => {
+  const { titre, description, date_debut, date_fin, priorite, type } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('evenements')
+      .insert({
+        titre,
+        description,
+        date_debut,
+        date_fin,
+        priorite,
+        type,
+        created_by: req.user.id
+      })
+      .select();
+
+    if (error) throw error;
+    res.status(201).json(data[0]);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ============================================
+// ROUTES HEURES TRAVAIL
+// ============================================
+
+// POST: Enregistrer heures (Chef/Tech)
+app.post('/api/heures', authMiddleware, async (req, res) => {
+  const { bon_id, technicien_id, heures_travaillees, notes } = req.body;
+
+  try {
+    const { data, error } = await supabase
+      .from('heures_travail')
+      .insert({
+        bon_id,
+        technicien_id,
+        heures_travaillees,
+        notes
+      })
+      .select();
+
+    if (error) throw error;
+    res.status(201).json(data[0]);
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// ============================================
+// SERVIR FRONTEND STATIQUE
+// ============================================
+
+app.use(express.static(__dirname));
+
+app.get('/setup', (req, res) => {
+  res.sendFile(__dirname + '/setup.html');
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(__dirname + '/login.html');
+});
+
+app.get('/portail-cadexair-frontend.html', (req, res) => {
+  res.sendFile(__dirname + '/portail-cadexair-frontend.html');
+});
+
+app.get('/', (req, res) => {
+  res.sendFile(__dirname + '/portail-cadexair-frontend.html');
+});
+
+// ============================================
+// HEALTH CHECK
+// ============================================
+
+app.get('/health', (req, res) => {
+  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+});
+
+// ============================================
+// START SERVER
+// ============================================
+
+app.listen(PORT, () => {
+  console.log(`✅ API Cadexair en écoute sur port ${PORT}`);
+  console.log(`📍 Stack: Express + Supabase`);
+  console.log(`🔐 Auth: JWT + Supabase Auth`);
 });

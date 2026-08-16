@@ -1,0 +1,1109 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portail Cadexair - Gestion Bons de Travail</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #f5f5f5;
+      color: #333;
+    }
+
+    /* ======= BANNIÈRE ÉVÉNEMENTS ======= */
+    .banner-events {
+      background: linear-gradient(135deg, #0F2537 0%, #1a3a52 100%);
+      color: white;
+      padding: 16px 20px;
+      border-bottom: 3px solid #EE1C25;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+
+    .banner-content {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .banner-title {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .events-list {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .event-item {
+      padding: 8px 12px;
+      background: rgba(255,255,255,0.1);
+      border-left: 3px solid #EE1C25;
+      border-radius: 4px;
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .event-item.haute {
+      border-left-color: #ff6b6b;
+      background: rgba(255,107,107,0.15);
+    }
+
+    .event-empty {
+      font-size: 13px;
+      color: rgba(255,255,255,0.7);
+      font-style: italic;
+    }
+
+    /* ======= LAYOUT ======= */
+    .container {
+      display: grid;
+      grid-template-columns: 250px 1fr;
+      min-height: 100vh;
+    }
+
+    /* ======= SIDEBAR ======= */
+    .sidebar {
+      background: #0F2537;
+      color: white;
+      padding: 20px 0;
+      box-shadow: 2px 0 8px rgba(0,0,0,0.1);
+      position: fixed;
+      left: 0;
+      top: 0;
+      width: 250px;
+      height: 100vh;
+      overflow-y: auto;
+    }
+
+    .sidebar h1 {
+      padding: 20px;
+      font-size: 16px;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      margin-bottom: 20px;
+      color: #EE1C25;
+    }
+
+    .sidebar-item {
+      padding: 12px 20px;
+      cursor: pointer;
+      border-left: 3px solid transparent;
+      transition: all 0.2s;
+      font-size: 14px;
+    }
+
+    .sidebar-item:hover {
+      background: rgba(238,28,37,0.1);
+      border-left-color: #EE1C25;
+    }
+
+    .sidebar-item.active {
+      background: rgba(238,28,37,0.2);
+      border-left-color: #EE1C25;
+      font-weight: 600;
+    }
+
+    .sidebar-user {
+      padding: 20px;
+      border-top: 1px solid rgba(255,255,255,0.1);
+      margin-top: auto;
+      font-size: 12px;
+      color: rgba(255,255,255,0.7);
+    }
+
+    /* ======= MAIN CONTENT ======= */
+    .main {
+      margin-left: 250px;
+      margin-top: 75px;
+      padding: 30px;
+      flex: 1;
+    }
+
+    .content-section {
+      display: none;
+    }
+
+    .content-section.active {
+      display: block;
+    }
+
+    /* ======= BONS DE TRAVAIL ======= */
+    .section-title {
+      font-size: 24px;
+      font-weight: 600;
+      margin-bottom: 24px;
+      color: #0F2537;
+    }
+
+    .bons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+      gap: 20px;
+      margin-bottom: 30px;
+    }
+
+    .bon-card {
+      background: white;
+      border-radius: 8px;
+      padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      cursor: pointer;
+      transition: all 0.3s;
+      border-left: 4px solid #E65100;
+    }
+
+    .bon-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+    }
+
+    .bon-card.termine {
+      border-left-color: #51cf66;
+      opacity: 0.8;
+    }
+
+    .bon-card.en_cours {
+      border-left-color: #EE1C25;
+    }
+
+    .bon-numero {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 8px;
+      font-weight: 600;
+    }
+
+    .bon-client {
+      font-size: 16px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #0F2537;
+    }
+
+    .bon-adresse {
+      font-size: 13px;
+      color: #666;
+      margin-bottom: 12px;
+      line-height: 1.4;
+    }
+
+    .bon-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-top: 12px;
+      border-top: 1px solid #f0f0f0;
+      font-size: 12px;
+    }
+
+    .bon-statut {
+      display: inline-block;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-weight: 600;
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .bon-statut.en_cours {
+      background: #ffe5e5;
+      color: #EE1C25;
+    }
+
+    .bon-statut.termine {
+      background: #e5ffe5;
+      color: #51cf66;
+    }
+
+    .bon-chef {
+      color: #666;
+      font-size: 12px;
+    }
+
+    /* ======= MODAL DÉTAIL BON ======= */
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0,0,0,0.5);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-content {
+      background: white;
+      border-radius: 12px;
+      padding: 30px;
+      max-width: 900px;
+      max-height: 90vh;
+      overflow-y: auto;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+      width: 90%;
+    }
+
+    .modal-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 24px;
+      border-bottom: 2px solid #f0f0f0;
+      padding-bottom: 16px;
+    }
+
+    .modal-header h2 {
+      font-size: 20px;
+      color: #0F2537;
+    }
+
+    .modal-close {
+      cursor: pointer;
+      font-size: 28px;
+      color: #999;
+      line-height: 1;
+      border: none;
+      background: none;
+    }
+
+    .modal-close:hover {
+      color: #333;
+    }
+
+    /* ======= FORMULAIRES ======= */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 6px;
+      font-size: 14px;
+      color: #0F2537;
+    }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      width: 100%;
+      padding: 10px;
+      border: 1px solid #ddd;
+      border-radius: 6px;
+      font-size: 14px;
+      font-family: inherit;
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 80px;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      outline: none;
+      border-color: #EE1C25;
+      box-shadow: 0 0 0 3px rgba(238,28,37,0.1);
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+    }
+
+    /* ======= HISTORIQUE ======= */
+    .historique-timeline {
+      margin-top: 24px;
+      padding-top: 24px;
+      border-top: 2px solid #f0f0f0;
+    }
+
+    .historique-timeline h3 {
+      font-size: 16px;
+      margin-bottom: 16px;
+      color: #0F2537;
+    }
+
+    .timeline-item {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid #f0f0f0;
+    }
+
+    .timeline-item:last-child {
+      border-bottom: none;
+    }
+
+    .timeline-dot {
+      width: 12px;
+      height: 12px;
+      background: #EE1C25;
+      border-radius: 50%;
+      margin-top: 4px;
+      flex-shrink: 0;
+    }
+
+    .timeline-content {
+      flex: 1;
+    }
+
+    .timeline-time {
+      font-size: 12px;
+      color: #999;
+      margin-bottom: 4px;
+    }
+
+    .timeline-text {
+      font-size: 14px;
+      color: #333;
+      line-height: 1.5;
+    }
+
+    .timeline-user {
+      font-weight: 600;
+      color: #0F2537;
+    }
+
+    /* ======= BOUTONS ======= */
+    .btn {
+      padding: 10px 16px;
+      border: none;
+      border-radius: 6px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #EE1C25;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #d41b20;
+    }
+
+    .btn-secondary {
+      background: #f0f0f0;
+      color: #333;
+    }
+
+    .btn-secondary:hover {
+      background: #e0e0e0;
+    }
+
+    .btn-small {
+      padding: 6px 12px;
+      font-size: 12px;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    /* ======= FILTRES ======= */
+    .filters {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    .filter-btn {
+      padding: 8px 14px;
+      border: 1px solid #ddd;
+      background: white;
+      border-radius: 20px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.2s;
+    }
+
+    .filter-btn.active {
+      background: #EE1C25;
+      color: white;
+      border-color: #EE1C25;
+    }
+
+    .filter-btn:hover {
+      border-color: #EE1C25;
+    }
+
+    /* ======= RESPONSIVE ======= */
+    @media (max-width: 1024px) {
+      .bons-grid {
+        grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      }
+    }
+
+    @media (max-width: 768px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+
+      .sidebar {
+        position: static;
+        width: 100%;
+        height: auto;
+        display: flex;
+        align-items: center;
+        padding: 10px;
+      }
+
+      .sidebar h1 {
+        margin-right: auto;
+        margin-bottom: 0;
+        padding: 0 10px;
+      }
+
+      .main {
+        margin-left: 0;
+        margin-top: 0;
+        padding: 15px;
+      }
+
+      .bons-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .form-row {
+        grid-template-columns: 1fr;
+      }
+
+      .modal-content {
+        width: 95%;
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== BANNIÈRE ÉVÉNEMENTS ===== -->
+  <div class="banner-events">
+    <div class="banner-content">
+      <div class="banner-title">📣 Infos & Événements à venir</div>
+      <div class="events-list" id="events-container">
+        <div class="event-empty">Chargement...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== LAYOUT PRINCIPAL ===== -->
+  <div class="container">
+
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+      <h1>📋 CADEXAIR</h1>
+
+      <div class="sidebar-item active" onclick="switchTab('dashboard')">
+        📊 Tableau de bord
+      </div>
+      <div class="sidebar-item" onclick="switchTab('bons')">
+        📝 Bons de travail
+      </div>
+      <div class="sidebar-item" onclick="switchTab('historique')">
+        ⏱️ Historique complet
+      </div>
+      <div class="sidebar-item" onclick="switchTab('inventaire')">
+        📦 Inventaire camions
+      </div>
+      <div class="sidebar-item" id="menu-users" style="display:none" onclick="switchTab('utilisateurs')">
+        👥 Utilisateurs
+      </div>
+
+      <div class="sidebar-user">
+        <div id="user-name">Connexion...</div>
+        <div style="color: rgba(255,255,255,0.5); font-size: 11px; margin-top: 6px;" id="user-role"></div>
+        <button class="btn btn-secondary btn-small" style="width:100%; margin-top:10px" onclick="logout()">
+          Déconnexion
+        </button>
+      </div>
+    </div>
+
+    <!-- CONTENU PRINCIPAL -->
+    <div class="main">
+
+      <!-- DASHBOARD -->
+      <div id="dashboard" class="content-section active">
+        <h2 class="section-title">📊 Tableau de bord</h2>
+        <div class="filters" id="quick-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+          <div style="background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #EE1C25;">
+            <div style="font-size: 12px; color: #999; margin-bottom: 8px;">EN COURS</div>
+            <div style="font-size: 28px; font-weight: 600; color: #0F2537;" id="stat-en-cours">0</div>
+          </div>
+          <div style="background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #E65100;">
+            <div style="font-size: 12px; color: #999; margin-bottom: 8px;">CETTE SEMAINE</div>
+            <div style="font-size: 28px; font-weight: 600; color: #0F2537;" id="stat-semaine">0</div>
+          </div>
+          <div style="background: white; padding: 16px; border-radius: 8px; border-left: 4px solid #51cf66;">
+            <div style="font-size: 12px; color: #999; margin-bottom: 8px;">TERMINÉS</div>
+            <div style="font-size: 28px; font-weight: 600; color: #0F2537;" id="stat-termine">0</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BONS DE TRAVAIL -->
+      <div id="bons" class="content-section">
+        <h2 class="section-title">📝 Bons de travail</h2>
+        
+        <div class="filters">
+          <button class="filter-btn active" onclick="filterBons('tous')">Tous</button>
+          <button class="filter-btn" onclick="filterBons('en_cours')">En cours</button>
+          <button class="filter-btn" onclick="filterBons('termine')">Terminé</button>
+          <button class="filter-btn" onclick="switchTab('form-bon')">+ Nouveau bon</button>
+        </div>
+
+        <div class="bons-grid" id="bons-grid"></div>
+      </div>
+
+      <!-- FORM BON (Caché par défaut) -->
+      <div id="form-bon" class="content-section">
+        <h2 class="section-title">📝 Créer nouveau bon</h2>
+        <div style="background: white; padding: 24px; border-radius: 8px; max-width: 600px;">
+          <form onsubmit="saveBon(event)">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Numéro du bon</label>
+                <input type="text" id="bon-numero" placeholder="EX-2024-001" required>
+              </div>
+              <div class="form-group">
+                <label>Date d'intervention</label>
+                <input type="date" id="bon-date" required>
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Nom du client</label>
+              <input type="text" id="bon-client" placeholder="Restaurant XYZ" required>
+            </div>
+
+            <div class="form-group">
+              <label>Adresse</label>
+              <input type="text" id="bon-adresse" placeholder="123 Rue de Paris" required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label>Chef d'équipe</label>
+                <select id="bon-chef" required>
+                  <option value="">-- Sélectionner --</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label>Heure du RDV</label>
+                <input type="time" id="bon-heure">
+              </div>
+            </div>
+
+            <div class="form-group">
+              <label>Description travaux</label>
+              <textarea id="bon-description" placeholder="Nettoyage complet de la hotte..."></textarea>
+            </div>
+
+            <div class="btn-group">
+              <button type="submit" class="btn btn-primary">💾 Créer le bon</button>
+              <button type="button" class="btn btn-secondary" onclick="switchTab('bons')">Annuler</button>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- HISTORIQUE COMPLET -->
+      <div id="historique" class="content-section">
+        <h2 class="section-title">⏱️ Historique complet</h2>
+        <div id="full-historique" style="background: white; padding: 20px; border-radius: 8px;">
+          <p style="color: #999; text-align: center;">Chargement...</p>
+        </div>
+      </div>
+
+      <!-- INVENTAIRE -->
+      <div id="inventaire" class="content-section">
+        <h2 class="section-title">📦 Inventaire camions</h2>
+        <p style="color: #999;">Fonctionnalité en cours de développement...</p>
+      </div>
+
+      <!-- UTILISATEURS (Admin/Master) -->
+      <div id="utilisateurs" class="content-section">
+        <h2 class="section-title">👥 Gestion utilisateurs</h2>
+        
+        <div class="filters">
+          <button class="btn btn-primary btn-small" onclick="showUserForm()">+ Créer utilisateur</button>
+        </div>
+
+        <div id="users-list" style="background: white; padding: 20px; border-radius: 8px;">
+          <p style="color: #999; text-align: center;">Chargement...</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ===== MODAL DÉTAIL BON ===== -->
+  <div id="modal-bon" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-bon-numero">Bon #...</h2>
+        <button class="modal-close" onclick="closeModal('modal-bon')">×</button>
+      </div>
+
+      <div id="modal-bon-details"></div>
+
+      <div class="historique-timeline">
+        <h3>📜 Historique du bon</h3>
+        <div id="modal-historique"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MODAL CRÉER UTILISATEUR ===== -->
+  <div id="modal-user" class="modal">
+    <div class="modal-content" style="max-width: 500px;">
+      <div class="modal-header">
+        <h2>Créer utilisateur</h2>
+        <button class="modal-close" onclick="closeModal('modal-user')">×</button>
+      </div>
+
+      <form onsubmit="saveUser(event)">
+        <div class="form-group">
+          <label>Email</label>
+          <input type="email" id="user-email" required>
+        </div>
+        <div class="form-group">
+          <label>Nom</label>
+          <input type="text" id="user-nom" required>
+        </div>
+        <div class="form-group">
+          <label>Rôle</label>
+          <select id="user-role-select" required>
+            <option value="">-- Sélectionner --</option>
+            <option value="technicien">Technicien</option>
+            <option value="chef_equipe">Chef d'équipe</option>
+            <option id="admin-option" value="admin_secondaire" style="display:none">Admin secondaire</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Mot de passe</label>
+          <input type="password" id="user-password" required>
+        </div>
+
+        <div class="btn-group">
+          <button type="submit" class="btn btn-primary">Créer</button>
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-user')">Annuler</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    // ============================================
+    // CONFIGURATION
+    // ============================================
+
+    const API_URL = 'https://portail-cadexair.onrender.com/api'; // À adapter pour production
+    let currentUser = null;
+    let currentFilter = 'tous';
+    let allBons = [];
+    let allEvents = [];
+
+    // ============================================
+    // INIT
+    // ============================================
+
+    document.addEventListener('DOMContentLoaded', () => {
+      checkAuth();
+      loadEvents();
+      loadBons();
+      loadUsers();
+      updateStats();
+    });
+
+    // ============================================
+    // AUTH
+    // ============================================
+
+    function checkAuth() {
+      const token = localStorage.getItem('cadexair_token');
+      if (!token) {
+        window.location.href = 'login.html'; // À créer
+        return;
+      }
+
+      const user = JSON.parse(localStorage.getItem('cadexair_user') || '{}');
+      currentUser = user;
+      document.getElementById('user-name').textContent = `👤 ${user.nom}`;
+      document.getElementById('user-role').textContent = user.role;
+
+      // Afficher menu Admin/Master
+      if (['master', 'admin_secondaire'].includes(user.role)) {
+        document.getElementById('menu-users').style.display = 'block';
+        if (user.role === 'master') {
+          document.getElementById('admin-option').style.display = 'block';
+        }
+      }
+    }
+
+    function logout() {
+      localStorage.clear();
+      window.location.href = 'login.html';
+    }
+
+    // ============================================
+    // ÉVÉNEMENTS (BANNIÈRE)
+    // ============================================
+
+    async function loadEvents() {
+      try {
+        const response = await fetch(`${API_URL}/evenements`);
+        const events = await response.json();
+        allEvents = events;
+        renderEvents();
+      } catch (error) {
+        console.error('Erreur chargement événements:', error);
+      }
+    }
+
+    function renderEvents() {
+      const container = document.getElementById('events-container');
+      
+      if (!allEvents || allEvents.length === 0) {
+        container.innerHTML = '<div class="event-empty">Pas d\'événements actuellement</div>';
+        return;
+      }
+
+      container.innerHTML = allEvents.map(evt => `
+        <div class="event-item ${evt.priorite}">
+          <strong>${evt.titre}</strong><br>
+          ${evt.description || ''}
+        </div>
+      `).join('');
+    }
+
+    // ============================================
+    // BONS DE TRAVAIL
+    // ============================================
+
+    async function loadBons() {
+      try {
+        const token = localStorage.getItem('cadexair_token');
+        const response = await fetch(`${API_URL}/bons`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        allBons = await response.json();
+        renderBons();
+      } catch (error) {
+        console.error('Erreur chargement bons:', error);
+      }
+    }
+
+    function renderBons() {
+      const grid = document.getElementById('bons-grid');
+      let bons = allBons;
+
+      if (currentFilter !== 'tous') {
+        bons = bons.filter(b => b.statut === currentFilter);
+      }
+
+      if (!bons.length) {
+        grid.innerHTML = '<p style="grid-column: 1/-1; color: #999; text-align: center;">Aucun bon trouvé</p>';
+        return;
+      }
+
+      grid.innerHTML = bons.map(bon => `
+        <div class="bon-card ${bon.statut}" onclick="showBonDetail('${bon.id}')">
+          <div class="bon-numero">${bon.numero}</div>
+          <div class="bon-client">${bon.client_nom}</div>
+          <div class="bon-adresse">${bon.client_adresse}</div>
+          
+          <div class="bon-meta">
+            <span class="bon-statut ${bon.statut}">${bon.statut.toUpperCase()}</span>
+            <span class="bon-chef">${bon.chef_equipe_id ? '👨‍💼 Assigné' : '⚠️ Non assigné'}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    function filterBons(filter) {
+      currentFilter = filter;
+      document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+      event.target.classList.add('active');
+      renderBons();
+    }
+
+    async function showBonDetail(bonId) {
+      try {
+        const token = localStorage.getItem('cadexair_token');
+        const response = await fetch(`${API_URL}/bons/${bonId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const data = await response.json();
+        
+        renderBonModal(data.bon, data.historique);
+        document.getElementById('modal-bon').classList.add('active');
+      } catch (error) {
+        console.error('Erreur:', error);
+      }
+    }
+
+    function renderBonModal(bon, historique) {
+      document.getElementById('modal-bon-numero').textContent = `Bon ${bon.numero}`;
+
+      const details = `
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px;">
+          <div>
+            <strong>Client</strong><br>${bon.client_nom}
+          </div>
+          <div>
+            <strong>Adresse</strong><br>${bon.client_adresse}
+          </div>
+          <div>
+            <strong>Date intervention</strong><br>${bon.date_intervention}
+          </div>
+          <div>
+            <strong>Statut</strong><br><span class="bon-statut ${bon.statut}">${bon.statut}</span>
+          </div>
+        </div>
+
+        <div style="background: #f9f9f9; padding: 12px; border-radius: 6px; margin-bottom: 20px;">
+          <strong>Description:</strong><br>${bon.description_travaux || 'N/A'}
+        </div>
+
+        ${bon.notes_travail ? `
+          <div style="background: #fffef0; padding: 12px; border-radius: 6px; border-left: 3px solid #E65100; margin-bottom: 20px;">
+            <strong>Notes travail:</strong><br>${bon.notes_travail}
+          </div>
+        ` : ''}
+
+        <button class="btn btn-primary" onclick="editBon('${bon.id}')">✏️ Modifier</button>
+      `;
+
+      document.getElementById('modal-bon-details').innerHTML = details;
+
+      // Historique
+      const historiqueHtml = historique && historique.length > 0 ? historique.map(h => `
+        <div class="timeline-item">
+          <div class="timeline-dot"></div>
+          <div class="timeline-content">
+            <div class="timeline-time">${new Date(h.changed_at).toLocaleString('fr-FR')}</div>
+            <div class="timeline-text">
+              <span class="timeline-user">${h.changed_by?.nom || 'Système'}</span>
+              ${h.nouveau_statut ? ` - Statut: <strong>${h.ancien_statut} → ${h.nouveau_statut}</strong>` : ''}
+            </div>
+          </div>
+        </div>
+      `).join('') : '<p style="color: #999;">Pas d\'historique</p>';
+
+      document.getElementById('modal-historique').innerHTML = historiqueHtml;
+    }
+
+    function editBon(bonId) {
+      alert('Modification en cours de développement');
+    }
+
+    async function saveBon(event) {
+      event.preventDefault();
+      
+      const bon = {
+        numero: document.getElementById('bon-numero').value,
+        client_nom: document.getElementById('bon-client').value,
+        client_adresse: document.getElementById('bon-adresse').value,
+        date_intervention: document.getElementById('bon-date').value,
+        chef_equipe_id: document.getElementById('bon-chef').value || null,
+        description_travaux: document.getElementById('bon-description').value
+      };
+
+      try {
+        const token = localStorage.getItem('cadexair_token');
+        const response = await fetch(`${API_URL}/bons`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(bon)
+        });
+
+        if (response.ok) {
+          alert('✅ Bon créé avec succès');
+          switchTab('bons');
+          loadBons();
+        } else {
+          alert('❌ Erreur création');
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+        alert('Erreur serveur');
+      }
+    }
+
+    // ============================================
+    // STATISTIQUES
+    // ============================================
+
+    function updateStats() {
+      const enCours = allBons.filter(b => b.statut === 'en_cours').length;
+      const semaine = allBons.filter(b => {
+        const date = new Date(b.date_intervention);
+        const now = new Date();
+        return (date - now) < 7 * 24 * 60 * 60 * 1000 && (date - now) >= 0;
+      }).length;
+      const termine = allBons.filter(b => b.statut === 'termine').length;
+
+      document.getElementById('stat-en-cours').textContent = enCours;
+      document.getElementById('stat-semaine').textContent = semaine;
+      document.getElementById('stat-termine').textContent = termine;
+    }
+
+    // ============================================
+    // UTILISATEURS (Admin)
+    // ============================================
+
+    async function loadUsers() {
+      if (!['master', 'admin_secondaire'].includes(currentUser.role)) {
+        return;
+      }
+
+      try {
+        const token = localStorage.getItem('cadexair_token');
+        const response = await fetch(`${API_URL}/utilisateurs`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const users = await response.json();
+        renderUsers(users);
+      } catch (error) {
+        console.error('Erreur:', error);
+      }
+    }
+
+    function renderUsers(users) {
+      const html = `
+        <table style="width: 100%; border-collapse: collapse;">
+          <thead>
+            <tr style="border-bottom: 2px solid #ddd;">
+              <th style="text-align: left; padding: 12px;">Nom</th>
+              <th style="text-align: left; padding: 12px;">Email</th>
+              <th style="text-align: left; padding: 12px;">Rôle</th>
+              <th style="text-align: left; padding: 12px;">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${users.map(user => `
+              <tr style="border-bottom: 1px solid #f0f0f0;">
+                <td style="padding: 12px;">${user.nom}</td>
+                <td style="padding: 12px;">${user.email}</td>
+                <td style="padding: 12px;">
+                  <span style="background: #f0f0f0; padding: 4px 8px; border-radius: 4px; font-size: 12px;">
+                    ${user.role}
+                  </span>
+                </td>
+                <td style="padding: 12px;">
+                  <button class="btn btn-secondary btn-small" onclick="deleteUser('${user.id}')">🗑️</button>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+
+      document.getElementById('users-list').innerHTML = html;
+    }
+
+    function showUserForm() {
+      document.getElementById('modal-user').classList.add('active');
+    }
+
+    async function saveUser(event) {
+      event.preventDefault();
+
+      const user = {
+        email: document.getElementById('user-email').value,
+        nom: document.getElementById('user-nom').value,
+        role: document.getElementById('user-role-select').value,
+        password: document.getElementById('user-password').value
+      };
+
+      try {
+        const token = localStorage.getItem('cadexair_token');
+        const response = await fetch(`${API_URL}/utilisateurs`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(user)
+        });
+
+        if (response.ok) {
+          alert('✅ Utilisateur créé');
+          closeModal('modal-user');
+          loadUsers();
+          event.target.reset();
+        } else {
+          alert('❌ Erreur création');
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+      }
+    }
+
+    async function deleteUser(userId) {
+      if (!confirm('Confirmer la suppression?')) return;
+
+      try {
+        const token = localStorage.getItem('cadexair_token');
+        const response = await fetch(`${API_URL}/utilisateurs/${userId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          alert('✅ Utilisateur supprimé');
+          loadUsers();
+        }
+      } catch (error) {
+        console.error('Erreur:', error);
+      }
+    }
+
+    // ============================================
+    // UI
+    // ============================================
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.content-section').forEach(s => s.classList.remove('active'));
+      document.querySelectorAll('.sidebar-item').forEach(i => i.classList.remove('active'));
+
+      document.getElementById(tabName)?.classList.add('active');
+      event?.target?.classList.add('active');
+    }
+
+    function closeModal(modalId) {
+      document.getElementById(modalId).classList.remove('active');
+    }
+  </script>
+
+</body>
+</html>
