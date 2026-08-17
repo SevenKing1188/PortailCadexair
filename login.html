@@ -239,53 +239,59 @@
     const API_URL = 'https://portail-cadexair.onrender.com/api';
 
     async function login(event) {
-      event.preventDefault();
+  event.preventDefault();
 
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      const errorMsg = document.getElementById('error-msg');
-      const successMsg = document.getElementById('success-msg');
-      const loginBtn = document.getElementById('login-btn');
-      const loading = document.getElementById('loading');
+  const email = document.getElementById('email').value;
+  const password = document.getElementById('password').value;
+  const errorMsg = document.getElementById('error-msg');
+  const successMsg = document.getElementById('success-msg');
+  const loginBtn = document.getElementById('login-btn');
+  const loading = document.getElementById('loading');
 
-      errorMsg.style.display = 'none';
-      successMsg.style.display = 'none';
-      loading.style.display = 'block';
-      loginBtn.disabled = true;
+  errorMsg.style.display = 'none';
+  successMsg.style.display = 'none';
+  loading.style.display = 'block';
+  loginBtn.disabled = true;
 
-      try {
-        const response = await fetch(`${API_URL}/auth/login`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({ email, password })
-        });
+  try {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ email, password })
+    });
 
-        const data = await response.json();
+    const data = await response.json();
 
-        if (!response.ok) {
-          throw new Error(data.error || 'Erreur de connexion');
-        }
-
-        localStorage.setItem('cadexair_token', data.token);
-        localStorage.setItem('cadexair_user', JSON.stringify(data.user));
-
-        successMsg.textContent = '✅ Connexion réussie! Redirection...';
-        successMsg.style.display = 'block';
-
-        setTimeout(() => {
-          window.location.href = '/portail-cadexair-frontend.html';
-        }, 1500);
-
-      } catch (error) {
-        errorMsg.textContent = '❌ ' + error.message;
-        errorMsg.style.display = 'block';
-      } finally {
-        loading.style.display = 'none';
-        loginBtn.disabled = false;
-      }
+    if (!response.ok) {
+      throw new Error(data.error || 'Erreur de connexion');
     }
+
+    if (!data.token || !data.user) {
+      throw new Error('Données manquantes de la réponse serveur');
+    }
+
+    localStorage.setItem('cadexair_token', data.token);
+    localStorage.setItem('cadexair_user', JSON.stringify(data.user));
+
+    successMsg.textContent = '✅ Connexion réussie! Redirection...';
+    successMsg.style.display = 'block';
+
+    setTimeout(() => {
+      window.location.href = '/portail-cadexair-frontend.html';
+    }, 1500);
+
+  } catch (error) {
+    console.error('Login error:', error);
+    errorMsg.textContent = '❌ ' + error.message;
+    errorMsg.style.display = 'block';
+  } finally {
+    loading.style.display = 'none';
+    loginBtn.disabled = false;
+  }
+}
+
   </script>
 
 </body>
