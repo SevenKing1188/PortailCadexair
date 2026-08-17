@@ -7,7 +7,9 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Supabase
+// Utilisation du proxy Render pour récupérer la vraie IP client
+app.set('trust proxy', 1);
+
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -22,18 +24,31 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// --- 1. RATE LIMITER (Protection Anti-Brute Force) ---
+// --- FONCTION D'AUDIT LOG ---
+const logAuditEvent = async (action, performedBy, targetUser, req) => {
+  const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
+  const userAgent = req.headers['user-agent'];
+
+  await supabaseAdmin.from('audit_logs').insert([
+    {
+      action,
+      performed_by: performedBy,
+      target_user: targetUser,
+      ip_address: ipAddress,
+      user_agent: userAgent
+    }
+  ]);
+};
+
+// Rate Limiter
 const loginLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // Fenêtre de 15 minutes
-  max: 5, // Bloque après 5 tentatives échouées ou réussies
-  message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' },
-  standardHeaders: true,
-  legacyHeaders: false,
+  windowMs: 15 * 60 * 1000,
+  max: 5,
+  message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
-// --- 2. VALIDATION DES MOTS DE PASSE ROBUSTES ---
+// Validation mot de passe (min 12 car, 1 maj, 1 min, 1 chiffre, 1 symbole)
 const isPasswordStrong = (password) => {
-  // Min 12 caractères, 1 majuscule, 1 minuscule, 1 chiffre, 1 symbole
   const strongRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/;
   return strongRegex.test(password);
 };
@@ -50,12 +65,16 @@ const authenticateUser = async (req, res, next) => {
   next();
 };
 
-// Route Connexion (Protégée par le Rate Limiter)
+// Route : Connexion
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return res.status(400).json({ error: 'Identifiants incorrects.' });
+  
+  if (error) {
+    await logAuditEvent('LOGIN_FAILED', email, null, req);
+    return res.status(400).json({ error: 'Identifiants incorrects.' });
+  }
 
   res.cookie('access_token', data.session.access_token, {
     httpOnly: true,
@@ -64,10 +83,11 @@ app.post('/api/login', loginLimiter, async (req, res) => {
     maxAge: 3600 * 1000
   });
 
+  await logAuditEvent('LOGIN_SUCCESS', email, null, req);
   res.json({ message: 'Connexion réussie.' });
 });
 
-// Route Création Utilisateur (Validation de mot de passe renforcée)
+// Route : Création Utilisateur
 app.post('/api/create-user', authenticateUser, async (req, res) => {
   const { email, password } = req.body;
 
@@ -75,10 +95,9 @@ app.post('/api/create-user', authenticateUser, async (req, res) => {
     return res.status(400).json({ error: 'Tous les champs sont requis.' });
   }
 
-  // Vérification de la sécurité du mot de passe
   if (!isPasswordStrong(password)) {
     return res.status(400).json({
-      error: 'Le mot de passe doit contenir au moins 12 caractères, dont une majuscule, une minuscule, un chiffre et un caractère spécial (@$!%*?&).'
+      error: 'Le mot de passe doit contenir au moins 12 caractères (1 majuscule, 1 minuscule, 1 chiffre, 1 symbole).'
     });
   }
 
@@ -88,14 +107,21 @@ app.post('/api/create-user', authenticateUser, async (req, res) => {
     email_confirm: true
   });
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    await logAuditEvent('CREATE_USER_FAILED', req.user.email, email, req);
+    return res.status(400).json({ error: error.message });
+  }
+
+  // Journalisation du succès de création
+  await logAuditEvent('CREATE_USER_SUCCESS', req.user.email, email, req);
 
   res.status(201).json({ message: `Utilisateur ${data.user.email} créé avec succès.` });
 });
 
+// Route : Déconnexion
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token');
   res.json({ message: 'Déconnexion réussie.' });
 });
 
-app.listen(PORT, () => console.log(`Serveur démarré sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
