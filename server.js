@@ -70,25 +70,32 @@ const loginLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
-// 5. HELPER D'AUDIT LOGS (Solution 1 : Inclut IP et User-Agent)
+// 5. HELPER D'AUDIT LOGS AMÉLIORÉ (Avec gestion des logs console explicites)
 const logAuditEvent = async (action, performedBy, targetUser, req) => {
   try {
-    const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
-    const userAgent = req.headers['user-agent'];
+    const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
+    const userAgent = req.headers['user-agent'] || 'Unknown';
 
-    const { error } = await supabaseAdmin.from('audit_logs').insert([
-      {
-        action,
-        performed_by: performedBy,
-        target_user: targetUser,
-        ip_address: ipAddress,
-        user_agent: userAgent
-      }
-    ]);
+    // Insertion directe via le rôle Service Role pour ignorer les blocages RLS
+    const { data, error } = await supabaseAdmin
+      .from('audit_logs')
+      .insert([
+        {
+          action: action,
+          performed_by: performedBy || 'Système',
+          target_user: targetUser || null,
+          ip_address: ipAddress,
+          user_agent: userAgent
+        }
+      ]);
 
-    if (error) console.error("Erreur d'insertion dans audit_logs :", error.message);
+    if (error) {
+      console.error("❌ ERREUR SUPABASE AUDIT LOG:", error.message, error.details);
+    } else {
+      console.log("✅ Audit log enregistré avec succès !");
+    }
   } catch (err) {
-    console.error("Exception système lors de la création de l'audit log :", err);
+    console.error("❌ EXCEPTION AUDIT LOG:", err);
   }
 };
 
