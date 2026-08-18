@@ -8,6 +8,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuration du proxy pour Render (Capture correcte des IP)
 app.set('trust proxy', 1);
 
 // Variables Supabase
@@ -15,7 +16,7 @@ const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-// En-têtes de sécurité
+// En-têtes de sécurité HTTP & CSP
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -36,13 +37,13 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-// Middlewares
+// Middlewares d'analyse de requêtes (limite 50mb pour l'envoi de photos terrain)
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// Protection CSRF
+// Protection CSRF / Vérification d'origine
 const csrfOriginCheck = (req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers['origin'] || req.headers['referer'];
@@ -55,7 +56,7 @@ const csrfOriginCheck = (req, res, next) => {
 };
 app.use(csrfOriginCheck);
 
-// Rate Limiting
+// Limitateurs de requêtes (Rate Limiting)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -69,7 +70,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
-// Journaux d'audit
+// Helper pour les journaux d'audit
 const logAuditEvent = async (action, performedBy, targetUser, req) => {
   try {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
@@ -95,11 +96,12 @@ const logAuditEvent = async (action, performedBy, targetUser, req) => {
   }
 };
 
+// Validation de la sécurité des mots de passe
 const isPasswordStrong = (password) => {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/.test(password);
 };
 
-// Middleware Profil Utilisateur
+// Middleware d'authentification et attachement du profil
 const attachUserProfile = async (req, res, next) => {
   const token = req.cookies.access_token;
   if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
@@ -126,6 +128,7 @@ const attachUserProfile = async (req, res, next) => {
 
 // --- ROUTES API ---
 
+// 1. Connexion
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -147,6 +150,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   res.json({ message: 'Connexion réussie.' });
 });
 
+// 2. Création d'un utilisateur hiérarchisé
 app.post('/api/create-user', attachUserProfile, async (req, res) => {
   const { email, password, username, role, department } = req.body;
   const callerRole = req.profile.role;
@@ -192,6 +196,7 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: `Compte ${role} créé avec succès pour ${username}.` });
 });
 
+// 3. Obtenir la liste des chefs d'équipe
 app.get('/api/chefs', attachUserProfile, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('profiles')
@@ -202,7 +207,7 @@ app.get('/api/chefs', attachUserProfile, async (req, res) => {
   res.json(data);
 });
 
-// Création restreinte aux comptes Master et Admin
+// 4. Création d'un bon de travail (Restreint au Master et aux Admins)
 app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   const callerRole = req.profile.role;
 
@@ -248,16 +253,36 @@ app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: 'Bon de travail créé et attribué avec succès.' });
 });
 
+// 5. Lecture de l'historique des bons de travail (Avec jointure explicite pour éviter l'erreur de colonne)
 app.get('/api/work-orders', attachUserProfile, async (req, res) => {
   const { data, error } = await supabaseAdmin
     .from('work_orders')
-    .select('*, profiles:assigned_to(username)')
+    .select('*, profiles!assigned_to(username)')
     .order('created_at', { ascending: false });
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    console.error("❌ Erreur récupération work_orders:", error.message);
+    return res.status(400).json({ error: error.message });
+  }
+
   res.json(data);
 });
 
+// 6. Ajout/Mise à jour des photos terrain par le chef d'équipe
+app.post('/api/work-orders/:id/photos', attachUserProfile, async (req, res) => {
+  const { id } = req.params;
+  const { photos } = req.body;
+
+  const { error } = await supabaseAdmin
+    .from('work_orders')
+    .update({ photos, status: 'Terminé' })
+    .eq('id', id);
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ message: 'Photos enregistrées et bon de travail complété.' });
+});
+
+// 7. Déconnexion
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token', {
     path: '/',
