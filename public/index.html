@@ -6,9 +6,9 @@
   <title>Portail Cadexair - Connexion</title>
   <style>
     :root {
-      --bg-color: #000000; /* Fond noir uni */
+      --bg-color: #000000;
       --card-bg: #111827;
-      --accent-color: #dc2626; /* Rouge Cadexair */
+      --accent-color: #dc2626;
       --accent-hover: #b91c1c;
       --text-color: #f8fafc;
       --text-muted: #94a3b8;
@@ -45,7 +45,6 @@
       flex-direction: column;
     }
 
-    /* Image du logo pleine largeur */
     .logo-img {
       width: 100%;
       height: auto;
@@ -112,7 +111,6 @@
 <body>
 
   <div class="login-container">
-    <!-- Image du logo Cadexair positionnée en haut et sur toute la largeur -->
     <img src="/logo.jpg" alt="Cadexair Expertise & Innovation" class="logo-img" />
 
     <form id="loginForm">
@@ -145,35 +143,7 @@
     </form>
   </div>
 
-  <script>
-    document.getElementById('loginForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const email = document.getElementById('email').value;
-      const password = document.getElementById('password').value;
-      const errorDiv = document.getElementById('errorMessage');
-
-      errorDiv.style.display = 'none';
-
-      try {
-        const response = await fetch('/api/login', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ email, password })
-        });
-
-        const data = await response.json();
-
-        if (response.ok) {
-          window.location.href = '/dashboard.html';
-        } else {
-          errorDiv.innerText = data.error || 'Erreur de connexion.';
-          errorDiv.style.display = 'block';
-        }
-      } catch (err) {
-        errorDiv.innerText = 'Erreur réseau. Veuillez réessayer.';
-        errorDiv.style.display = 'block';
-      }
-    });
-  </script>
+  <!-- Chargement externe du JS conforme au CSP -->
+  <script src="/login.js"></script>
 </body>
 </html>
