@@ -70,14 +70,13 @@ const loginLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
-// 5. HELPER D'AUDIT LOGS AMÉLIORÉ (Avec gestion des logs console explicites)
+// 5. HELPER D'AUDIT LOGS
 const logAuditEvent = async (action, performedBy, targetUser, req) => {
   try {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
-    // Insertion directe via le rôle Service Role pour ignorer les blocages RLS
-    const { data, error } = await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from('audit_logs')
       .insert([
         {
@@ -104,8 +103,8 @@ const isPasswordStrong = (password) => {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/.test(password);
 };
 
-// 6. MIDDLEWARE D'AUTHENTIFICATION STRICTE
-const authenticateAdmin = async (req, res, next) => {
+// 6. MIDDLEWARE D'AUTHENTIFICATION & RÉCUPÉRATION DU PROFIL
+const attachUserProfile = async (req, res, next) => {
   const token = req.cookies.access_token;
   if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
 
@@ -115,7 +114,19 @@ const authenticateAdmin = async (req, res, next) => {
     return res.status(401).json({ error: 'Session invalide ou expirée.' });
   }
 
+  // Récupération du profil depuis la table profiles
+  const { data: profile } = await supabaseAdmin
+    .from('profiles')
+    .select('*')
+    .eq('id', user.id)
+    .single();
+
   req.user = user;
+  // Définition du rôle master si c'est glesieur@cadexair.com, sinon rôle trouvé ou chef_equipe
+  req.profile = profile || {
+    role: user.email === 'glesieur@cadexair.com' ? 'master' : 'chef_equipe'
+  };
+
   next();
 };
 
@@ -144,12 +155,22 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   res.json({ message: 'Connexion réussie.' });
 });
 
-// Route : Création d'Utilisateur
-app.post('/api/create-user', authenticateAdmin, async (req, res) => {
-  const { email, password } = req.body;
+// Route : Création d'Utilisateur avec Rôles
+app.post('/api/create-user', attachUserProfile, async (req, res) => {
+  const { email, password, username, role, department } = req.body;
+  const callerRole = req.profile.role;
 
-  if (!email || !password) {
+  if (!email || !password || !username || !role || !department) {
     return res.status(400).json({ error: 'Tous les champs sont requis.' });
+  }
+
+  // Contrôle des permissions de création selon la hiérarchie
+  if (role === 'admin' && callerRole !== 'master') {
+    return res.status(403).json({ error: 'Seul le compte Master (glesieur@cadexair.com) peut créer des Administrateurs.' });
+  }
+
+  if (role === 'chef_equipe' && !['master', 'admin'].includes(callerRole)) {
+    return res.status(403).json({ error: 'Permissions insuffisantes pour créer un Chef d’équipe.' });
   }
 
   if (!isPasswordStrong(password)) {
@@ -158,19 +179,74 @@ app.post('/api/create-user', authenticateAdmin, async (req, res) => {
     });
   }
 
-  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+  // 1. Création de l'utilisateur dans Supabase Auth
+  const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
     email_confirm: true
   });
 
-  if (error) {
+  if (authError) {
     await logAuditEvent('CREATE_USER_FAILED', req.user.email, email, req);
+    return res.status(400).json({ error: authError.message });
+  }
+
+  // 2. Enregistrement du profil (Nom d'utilisateur, Rôle, Département)
+  const { error: profileError } = await supabaseAdmin.from('profiles').insert([
+    {
+      id: authData.user.id,
+      email,
+      username,
+      role,
+      department
+    }
+  ]);
+
+  if (profileError) {
+    console.error("Erreur création profil :", profileError.message);
+    return res.status(400).json({ error: "Erreur lors de l'enregistrement du profil." });
+  }
+
+  await logAuditEvent(`CREATE_${role.toUpperCase()}_SUCCESS`, req.user.email, email, req);
+  res.status(201).json({ message: `Compte ${role} créé avec succès pour ${username}.` });
+});
+
+// Route : Récupération de la liste des chefs d'équipe
+app.get('/api/chefs', attachUserProfile, async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, username, department')
+    .eq('role', 'chef_equipe');
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json(data);
+});
+
+// Route : Création et Assignation d'un Bon de Travail
+app.post('/api/work-orders', attachUserProfile, async (req, res) => {
+  const { title, description, department, assignedTo } = req.body;
+
+  if (!title || !description || !department || !assignedTo) {
+    return res.status(400).json({ error: 'Tous les champs du bon de travail sont requis.' });
+  }
+
+  const { error } = await supabaseAdmin.from('work_orders').insert([
+    {
+      title,
+      description,
+      department,
+      assigned_to: assignedTo,
+      created_by: req.user.id
+    }
+  ]);
+
+  if (error) {
+    await logAuditEvent('CREATE_WORK_ORDER_FAILED', req.user.email, title, req);
     return res.status(400).json({ error: error.message });
   }
 
-  await logAuditEvent('CREATE_USER_SUCCESS', req.user.email, email, req);
-  res.status(201).json({ message: `Utilisateur ${data.user.email} créé avec succès.` });
+  await logAuditEvent('CREATE_WORK_ORDER_SUCCESS', req.user.email, title, req);
+  res.status(201).json({ message: 'Bon de travail créé et attribué avec succès.' });
 });
 
 // Route : Déconnexion
@@ -184,4 +260,4 @@ app.post('/api/logout', async (req, res) => {
 });
 
 // Démarrage du serveur
-app.listen(PORT, () => console.log(`Serveur sécurisé actif sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`Serveur Cadexair actif sur le port ${PORT}`));
