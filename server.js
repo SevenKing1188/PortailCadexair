@@ -10,7 +10,18 @@ const PORT = process.env.PORT || 3000;
 
 app.set('trust proxy', 1);
 
-app.use(helmet());
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"], // Autorise les scripts inline internes
+        styleSrc: ["'self'", "'unsafe-inline'"],  // Autorise le CSS inline
+        connectSrc: ["'self'", SUPABASE_URL]      // Autorise les requêtes vers Supabase
+      }
+    }
+  })
+);
 
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;

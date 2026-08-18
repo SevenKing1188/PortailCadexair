@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <title>Gestion des Utilisateurs</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 40px; background: #eef2f5; }
+    .card { max-width: 400px; background: white; padding: 30px; margin: 0 auto; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    input { width: 100%; padding: 10px; margin: 10px 0; border: 1px solid #ccc; border-radius: 4px; box-sizing: border-box; }
+    button { padding: 10px; width: 100%; border: none; border-radius: 4px; cursor: pointer; margin-top: 5px; }
+    .btn-add { background: #28a745; color: white; }
+    .btn-logout { background: #dc3545; color: white; }
+    .msg { margin-top: 15px; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h2>Nouvel Utilisateur</h2>
+    <form id="createUserForm">
+      <input type="email" id="newEmail" placeholder="E-mail de l'utilisateur" required>
+      <input type="password" id="newPassword" placeholder="Mot de passe (6 car. min)" required>
+      <button type="submit" class="btn-add">Créer le compte</button>
+    </form>
+    <button id="logoutBtn" class="btn-logout">Déconnexion</button>
+    <div id="statusMsg" class="msg"></div>
+  </div>
+
+  <script src="dashboard.js"></script>
+</body>
+</html>
+</body>
+</html>
