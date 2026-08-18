@@ -17,11 +17,16 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSettings.addEventListener('click', () => sidebar.classList.remove('open'));
   }
 
-  // Déconnexion
+  // Déconnexion avec redirection forcée
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
-      await fetch('/api/logout', { method: 'POST' });
-      window.location.href = '/index.html';
+      try {
+        await fetch('/api/logout', { method: 'POST' });
+      } catch (err) {
+        console.error("Erreur déconnexion réseau :", err);
+      } finally {
+        window.location.href = '/index.html';
+      }
     });
   }
 
@@ -32,7 +37,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Chargement des chefs d'équipe
+  // Chargement des chefs d'équipe avec leur Nom d'utilisateur (username)
   async function loadChefs() {
     try {
       const res = await fetch('/api/chefs');
@@ -40,15 +45,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const chefs = await res.json();
         const select = document.getElementById('woAssignee');
         if (select) {
-          select.innerHTML = chefs.map(c => `<option value="${c.id}">${c.username} (${c.department})</option>`).join('');
+          if (chefs.length === 0) {
+            select.innerHTML = '<option value="">Aucun chef d’équipe disponible</option>';
+            return;
+          }
+          select.innerHTML = chefs.map(c => 
+            `<option value="${c.id}">${c.username} (${c.department})</option>`
+          ).join('');
         }
       }
     } catch (err) {
-      console.error("Erreur chefs :", err);
+      console.error("Erreur lors du chargement des chefs d'équipe :", err);
     }
   }
 
-  // Chargement de l'historique
+  // Chargement de l'historique des bons de travail
   async function loadHistory() {
     try {
       const res = await fetch('/api/work-orders');
@@ -66,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           `).join('');
 
-          // Ajout des écouteurs de clic sur l'historique
           document.querySelectorAll('.history-item').forEach(item => {
             item.addEventListener('click', () => {
               const id = item.getAttribute('data-id');
@@ -77,7 +87,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     } catch (err) {
-      console.error("Erreur historique :", err);
+      console.error("Erreur lors du chargement de l'historique :", err);
     }
   }
 
@@ -90,13 +100,14 @@ document.addEventListener('DOMContentLoaded', () => {
       <p><strong>Rendez-vous :</strong> ${o.appointment_date || ''} à ${o.appointment_time || ''}</p>
       <p><strong>Équipements :</strong> ${o.nb_hottes} Hottes, ${o.nb_portes_acces} Portes, ${o.nb_ventilateurs} Ventilateurs</p>
       <p><strong>Département :</strong> ${o.department}</p>
+      <p><strong>Assigné à :</strong> ${o.profiles ? o.profiles.username : 'Non assigné'}</p>
       <p><strong>Description :</strong> ${o.description}</p>
       <p><strong>Statut :</strong> ${o.status}</p>
     `;
     detailsModal.style.display = 'flex';
   }
 
-  // Soumission : Création Utilisateur
+  // Soumission : Création d'utilisateur
   if (createUserForm) {
     createUserForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -115,11 +126,14 @@ document.addEventListener('DOMContentLoaded', () => {
       });
       const data = await res.json();
       alert(data.message || data.error);
-      if (res.ok) createUserForm.reset();
+      if (res.ok) {
+        createUserForm.reset();
+        loadChefs();
+      }
     });
   }
 
-  // Soumission : Bon de Travail
+  // Soumission : Bon de travail
   if (workOrderForm) {
     workOrderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
