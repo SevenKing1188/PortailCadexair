@@ -20,7 +20,6 @@
 
     .btn-settings { background: none; border: none; color: var(--text-white); font-size: 1.5rem; cursor: pointer; }
 
-    /* Panneau Latéral */
     .sidebar { position: fixed; top: 0; right: -400px; width: 350px; height: 100%; background: var(--card-bg); border-left: 2px solid var(--accent-red); transition: 0.3s; padding: 1.5rem; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; z-index: 100; }
     .sidebar.open { right: 0; }
     .sidebar-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
@@ -37,11 +36,9 @@
     button { width: 100%; padding: 0.75rem; background: var(--accent-red); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
     button:hover { background: var(--accent-red-hover); }
 
-    /* Historique */
     .history-item { background: var(--bg-black); border: 1px solid var(--border-color); padding: 1rem; margin-bottom: 0.5rem; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; }
     .history-item:hover { border-color: var(--accent-red); }
 
-    /* Modal Détails */
     .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 200; }
     .modal-content { background: var(--card-bg); padding: 2rem; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--accent-red); }
   </style>
@@ -91,13 +88,11 @@
 
   <!-- Contenu Principal -->
   <div class="container">
-    <!-- Formulaire Bon de Travail -->
     <div class="card">
       <h2>Créer un Bon de Travail</h2>
       <form id="workOrderForm">
         <div class="form-group"><label>Titre de la tâche</label><input type="text" id="woTitle" required></div>
         
-        <!-- Infos Client -->
         <h3>Informations Client</h3>
         <div class="form-group"><label>Nom du Client</label><input type="text" id="clientName" required></div>
         <div class="form-group"><label>Adresse Complète</label><input type="text" id="clientAddress" required></div>
@@ -106,7 +101,6 @@
           <div class="form-group"><label>Heure</label><input type="time" id="appointmentTime" required></div>
         </div>
 
-        <!-- Quantités -->
         <div class="form-row">
           <div class="form-group"><label>Nb Hottes</label><input type="number" id="nbHottes" value="0"></div>
           <div class="form-group"><label>Nb Portes d'accès</label><input type="number" id="nbPortesAcces" value="0"></div>
@@ -123,7 +117,6 @@
       </form>
     </div>
 
-    <!-- Historique des Bons de Travail -->
     <div class="card">
       <h2>Historique des Bons de Travail</h2>
       <div id="historyList">Chargement...</div>
@@ -135,35 +128,11 @@
     <div class="modal-content">
       <h2 id="modalTitle">Détails du Bon de Travail</h2>
       <div id="modalBody"></div>
-      <button onclick="document.getElementById('detailsModal').style.display='none'" style="margin-top:1rem;">Fermer</button>
+      <button id="closeModalBtn" style="margin-top:1rem;">Fermer</button>
     </div>
   </div>
 
-  <script>
-    // Panneau Paramètres
-    document.getElementById('openSettings').onclick = () => document.getElementById('sidebar').classList.add('open');
-    document.getElementById('closeSettings').onclick = () => document.getElementById('sidebar').classList.remove('open');
-
-    // Déconnexion avec redirection
-    document.getElementById('logoutBtn').onclick = async () => {
-      await fetch('/api/logout', { method: 'POST' });
-      window.location.href = '/login.html';
-    };
-
-    // Chargement de l'historique
-    async function loadHistory() {
-      const res = await fetch('/api/work-orders');
-      const orders = await res.json();
-      const list = document.getElementById('historyList');
-      list.innerHTML = orders.map(o => `
-        <div class="history-item" onclick="openDetails(${o.id})">
-          <div><strong>${o.title}</strong> - ${o.client_name || 'Client N/A'}</div>
-          <div><span style="color:${o.status==='Terminé'?'green':'orange'}">${o.status}</span></div>
-        </div>
-      `).join('');
-    }
-
-    loadHistory();
-  </script>
+  <!-- Chargement sécurisé du script externe -->
+  <script src="/js/dashboard.js"></script>
 </body>
 </html>
