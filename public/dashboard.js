@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsModal = document.getElementById('detailsModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
 
-  // Gestion du Panneau Paramètres
+  // Gestion du Panneau Paramètres Latéral
   if (openSettings) {
     openSettings.addEventListener('click', () => sidebar.classList.add('open'));
   }
@@ -17,27 +17,27 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSettings.addEventListener('click', () => sidebar.classList.remove('open'));
   }
 
-  // Déconnexion avec redirection forcée
+  // Déconnexion avec redirection forcée vers la page d'accueil/connexion
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
         await fetch('/api/logout', { method: 'POST' });
       } catch (err) {
-        console.error("Erreur déconnexion réseau :", err);
+        console.error("Erreur réseau lors de la déconnexion :", err);
       } finally {
         window.location.href = '/index.html';
       }
     });
   }
 
-  // Fermeture Modale
+  // Fermeture de la Fenêtre Modale de détails
   if (closeModalBtn) {
     closeModalBtn.addEventListener('click', () => {
       detailsModal.style.display = 'none';
     });
   }
 
-  // Chargement des chefs d'équipe avec leur Nom d'utilisateur (username)
+  // Chargement dynamique de la liste des chefs d'équipe avec leur Nom d'utilisateur (username)
   async function loadChefs() {
     try {
       const res = await fetch('/api/chefs');
@@ -59,7 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Chargement de l'historique des bons de travail
+  // Chargement de l'historique complet des bons de travail
   async function loadHistory() {
     try {
       const res = await fetch('/api/work-orders');
@@ -77,6 +77,7 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           `).join('');
 
+          // Écouteur de clic pour ouvrir la vue détaillée
           document.querySelectorAll('.history-item').forEach(item => {
             item.addEventListener('click', () => {
               const id = item.getAttribute('data-id');
@@ -91,23 +92,24 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Affichage des détails d'un bon de travail
+  // Affichage des détails d'un bon de travail dans la modale
   function showOrderDetails(o) {
+    const assignedName = o.profiles ? o.profiles.username : 'Non assigné';
     document.getElementById('modalTitle').innerText = o.title;
     document.getElementById('modalBody').innerHTML = `
       <p><strong>Client :</strong> ${o.client_name || 'N/A'}</p>
       <p><strong>Adresse :</strong> ${o.client_address || 'N/A'}</p>
       <p><strong>Rendez-vous :</strong> ${o.appointment_date || ''} à ${o.appointment_time || ''}</p>
-      <p><strong>Équipements :</strong> ${o.nb_hottes} Hottes, ${o.nb_portes_acces} Portes, ${o.nb_ventilateurs} Ventilateurs</p>
+      <p><strong>Équipements :</strong> ${o.nb_hottes} Hotte(s), ${o.nb_portes_acces} Porte(s) d'accès, ${o.nb_ventilateurs} Ventilateur(s)</p>
       <p><strong>Département :</strong> ${o.department}</p>
-      <p><strong>Assigné à :</strong> ${o.profiles ? o.profiles.username : 'Non assigné'}</p>
+      <p><strong>Assigné à :</strong> ${assignedName}</p>
       <p><strong>Description :</strong> ${o.description}</p>
       <p><strong>Statut :</strong> ${o.status}</p>
     `;
     detailsModal.style.display = 'flex';
   }
 
-  // Soumission : Création d'utilisateur
+  // Soumission : Création d'Utilisateur dans le panneau latéral
   if (createUserForm) {
     createUserForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -133,7 +135,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Soumission : Bon de travail
+  // Soumission : Création de Bon de Travail
   if (workOrderForm) {
     workOrderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -165,6 +167,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
+  // Exécution au démarrage
   loadChefs();
   loadHistory();
 });
