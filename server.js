@@ -8,10 +8,10 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Requis pour capturer la vraie IP derrière le proxy de Render
+// Requis pour capturer l'adresse IP réelle derrière le proxy Render
 app.set('trust proxy', 1);
 
-// 1. DÉCLARATION DES VARIABLES SUPABASE
+// 1. DÉCLARATION DES VARIABLES SUPABASE EN PREMIER
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -60,7 +60,7 @@ app.use(csrfOriginCheck);
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
-  message: { error: 'Trop de requêtes depuis cette IP, veuillez réanalyser plus tard.' }
+  message: { error: 'Trop de requêtes depuis cette IP, veuillez réessayer plus tard.' }
 });
 app.use(globalLimiter);
 
@@ -70,7 +70,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
-// 5. HELPER D'AUDIT LOGS SÉCURISÉ (Inclusion des erreurs en console)
+// 5. HELPER D'AUDIT LOGS (Solution 1 : Inclut IP et User-Agent)
 const logAuditEvent = async (action, performedBy, targetUser, req) => {
   try {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
