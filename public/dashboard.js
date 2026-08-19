@@ -18,7 +18,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   let availableEmployees = [];
   let availableChefs = [];
 
-  // Helper de création d'options sécurisées contre le XSS
+  // Constructeur sécurisé d'options <option>
   const createSafeOption = (value, text) => {
     const opt = document.createElement('option');
     opt.value = value;
@@ -26,28 +26,77 @@ document.addEventListener('DOMContentLoaded', async () => {
     return opt;
   };
 
+  // Gestion des sessions expirées ou non autorisées
+  const handleAuthError = (res) => {
+    if (res.status === 401 || res.status === 403) {
+      window.location.href = '/index.html';
+      return true;
+    }
+    return false;
+  };
+
+  // Controles de la barre latérale
   settingsBtn?.addEventListener('click', () => sidePanel.classList.add('open'));
   closePanelBtn?.addEventListener('click', () => sidePanel.classList.remove('open'));
 
+  // Charger la liste des Chefs d'équipe
   const loadChefs = async () => {
     try {
       const res = await fetch('/api/chefs');
-      availableChefs = await res.json();
+      if (handleAuthError(res)) return;
+
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        console.error("Format de réponse chefs invalide :", data);
+        return;
+      }
+
+      availableChefs = data;
       if (assignedToSelect) {
         assignedToSelect.innerHTML = '';
         assignedToSelect.appendChild(createSafeOption('', "Sélectionner un chef d'équipe"));
         availableChefs.forEach(c => {
-          assignedToSelect.appendChild(createSafeOption(c.id, c.full_name || c.username));
+          const name = c.full_name || c.username || 'Chef';
+          assignedToSelect.appendChild(createSafeOption(c.id, name));
         });
       }
-    } catch (err) { console.error("Erreur chargement chefs:", err); }
+    } catch (err) {
+      console.error("Erreur de chargement des chefs :", err);
+    }
   };
 
+  // Rafraîchir toutes les listes déroulantes d'employés affichées sur la page
+  const refreshAllEmployeeDropdowns = () => {
+    if (!techSelectContainer) return;
+    const allEmpSelects = techSelectContainer.querySelectorAll('.employee-dropdown');
+    allEmpSelects.forEach(select => {
+      const currentVal = select.value;
+      select.innerHTML = '';
+      select.appendChild(createSafeOption('', 'Sélectionner un employé'));
+      if (Array.isArray(availableEmployees)) {
+        availableEmployees.forEach(emp => {
+          select.appendChild(createSafeOption(emp.full_name, emp.full_name));
+        });
+      }
+      select.value = currentVal;
+    });
+  };
+
+  // Charger la liste des Employés
   const loadEmployees = async () => {
     try {
       const res = await fetch('/api/employees');
-      availableEmployees = await res.json();
+      if (handleAuthError(res)) return;
 
+      const data = await res.json();
+      if (!Array.isArray(data)) {
+        console.error("Format de réponse employés invalide :", data);
+        return;
+      }
+
+      availableEmployees = data;
+
+      // Mise à jour du menu déroulant dans Paramètres (Section 3)
       if (manageEmployeesSelect) {
         manageEmployeesSelect.innerHTML = '';
         manageEmployeesSelect.appendChild(createSafeOption('', 'Sélectionner un employé à supprimer'));
@@ -56,24 +105,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
       }
 
-      const allEmpSelects = techSelectContainer.querySelectorAll('.employee-dropdown');
-      allEmpSelects.forEach(select => {
-        const currentVal = select.value;
-        select.innerHTML = '';
-        select.appendChild(createSafeOption('', 'Sélectionner un employé'));
-        availableEmployees.forEach(emp => {
-          select.appendChild(createSafeOption(emp.full_name, emp.full_name));
-        });
-        select.value = currentVal;
-      });
+      refreshAllEmployeeDropdowns();
 
-    } catch (err) { console.error("Erreur chargement employés:", err); }
+    } catch (err) {
+      console.error("Erreur de chargement des employés :", err);
+    }
   };
 
-  await loadChefs();
-  await loadEmployees();
-
+  // Ajouter un champ de sélection d'employé dans le formulaire
   const addEmployeeSelectRow = () => {
+    if (!techSelectContainer) return;
     const div = document.createElement('div');
     div.className = 'tech-select-row';
     
@@ -81,9 +122,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     select.className = 'employee-dropdown';
     select.style.flex = '1';
     select.appendChild(createSafeOption('', 'Sélectionner un employé'));
-    availableEmployees.forEach(emp => {
-      select.appendChild(createSafeOption(emp.full_name, emp.full_name));
-    });
+
+    if (Array.isArray(availableEmployees)) {
+      availableEmployees.forEach(emp => {
+        select.appendChild(createSafeOption(emp.full_name, emp.full_name));
+      });
+    }
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
@@ -95,12 +139,17 @@ document.addEventListener('DOMContentLoaded', async () => {
     techSelectContainer.appendChild(div);
   };
 
+  // Initialisation au chargement de la page
+  await loadChefs();
+  await loadEmployees();
+
   if (techSelectContainer && techSelectContainer.children.length === 0) {
     addEmployeeSelectRow();
   }
 
   addTechBtn?.addEventListener('click', addEmployeeSelectRow);
 
+  // Génération des lignes de saisie d'heures
   generateTimeEntriesBtn?.addEventListener('click', () => {
     const chefId = assignedToSelect.value;
     const selectedChef = availableChefs.find(c => c.id === chefId);
@@ -173,6 +222,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     timeEntriesPanel.style.display = 'block';
   });
 
+  // Soumission Bon de travail
   workOrderForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(workOrderForm);
@@ -215,10 +265,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       addEmployeeSelectRow();
     } else {
       const err = await res.json();
-      alert('Erreur : ' + err.error);
+      alert('Erreur : ' + (err.error || 'Erreur lors de la création'));
     }
   });
 
+  // Soumission : Créer un Chef d'équipe
   createUserForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(createUserForm);
@@ -236,10 +287,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadChefs();
     } else {
       const err = await res.json();
-      alert('Erreur : ' + err.error);
+      alert('Erreur : ' + (err.error || 'Erreur de création'));
     }
   });
 
+  // Soumission : Créer un Employé Terrain
   createEmployeeForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(createEmployeeForm);
@@ -257,10 +309,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadEmployees();
     } else {
       const err = await res.json();
-      alert('Erreur : ' + err.error);
+      alert('Erreur : ' + (err.error || 'Erreur lors de l\'ajout'));
     }
   });
 
+  // Action : Supprimer un Employé
   deleteEmployeeBtn?.addEventListener('click', async () => {
     const selectedId = manageEmployeesSelect.value;
     if (!selectedId) return alert('Veuillez sélectionner un employé à supprimer.');
@@ -274,10 +327,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       await loadEmployees();
     } else {
       const err = await res.json();
-      alert('Erreur : ' + err.error);
+      alert('Erreur : ' + (err.error || 'Erreur de suppression'));
     }
   });
 
+  // Déconnexion
   logoutBtn?.addEventListener('click', async () => {
     await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/index.html';
