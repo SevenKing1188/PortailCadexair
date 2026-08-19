@@ -14,7 +14,7 @@
     button { padding: 8px 16px; cursor: pointer; }
 
     /* Sidebar */
-    .side-panel { position: fixed; top: 0; right: -350px; width: 320px; height: 100%; background: #fff; box-shadow: -2px 0 5px rgba(0,0,0,0.2); transition: right 0.3s ease; padding: 20px; z-index: 1000; overflow-y: auto; }
+    .side-panel { position: fixed; top: 0; right: -380px; width: 340px; height: 100%; background: #fff; box-shadow: -2px 0 5px rgba(0,0,0,0.2); transition: right 0.3s ease; padding: 20px; z-index: 1000; overflow-y: auto; }
     .side-panel.open { right: 0; }
     .tech-row { display: flex; gap: 10px; margin-bottom: 5px; }
   </style>
@@ -42,14 +42,9 @@
         <div class="form-group"><label>Chef d'équipe</label><select name="assignedTo" id="assignedTo"><option value="">Chargement...</option></select></div>
       </div>
 
-      <h3>Techniciens et temps de travail</h3>
-      <div id="technicians-container">
-        <div class="tech-row">
-          <input type="text" name="techName[]" placeholder="Nom technicien" required>
-          <input type="number" name="techHours[]" placeholder="Heures" required>
-        </div>
-      </div>
-      <button type="button" id="add-tech-btn">+ Ajouter technicien</button>
+      <h3>Techniciens et temps de travail (Terrain)</h3>
+      <div id="technicians-container"></div>
+      <button type="button" id="add-tech-btn">+ Ajouter entrée de temps</button>
 
       <div class="form-group" style="margin-top:20px;">
         <label>Description</label>
@@ -67,12 +62,14 @@
 
   <!-- PANNEAU PARAMÈTRES (Sidebar) -->
   <aside id="side-panel" class="side-panel">
-    <div style="display:flex; justify-content:space-between;">
-      <h3>Paramètres</h3>
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <h3>Paramètres Admin</h3>
       <button id="close-panel-btn">X</button>
     </div>
     <hr>
-    <h4>Ajouter un Utilisateur</h4>
+    
+    <!-- Formulaire 1: Créer Utilisateur -->
+    <h4>1. Créer un Utilisateur système</h4>
     <form id="create-user-form">
       <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
       <div class="form-group"><label>Mot de passe</label><input type="password" name="password" required></div>
@@ -82,6 +79,18 @@
         <select name="role"><option value="chef">Chef d'équipe</option><option value="admin">Administrateur</option></select>
       </div>
       <button type="submit">Créer utilisateur</button>
+    </form>
+
+    <hr style="margin:20px 0;">
+
+    <!-- Formulaire 2: Créer Employé Terrain -->
+    <h4>2. Créer un Employé (Terrain)</h4>
+    <form id="create-employee-form">
+      <div class="form-group">
+        <label>Nom complet de l'employé</label>
+        <input type="text" name="fullName" placeholder="Ex: Jean Dupont" required>
+      </div>
+      <button type="submit">Ajouter l'employé</button>
     </form>
   </aside>
 
