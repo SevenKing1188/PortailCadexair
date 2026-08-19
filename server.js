@@ -7,12 +7,14 @@ const path = require('path');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const MASTER_EMAIL = 'glesieur@cadexair.com';
 
+// Configuration Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-// Enforcing strict Security Headers (CSP)
+// En-têtes de sécurité renforcés
 app.use(helmet({
   contentSecurityPolicy: {
     directives: {
@@ -24,11 +26,11 @@ app.use(helmet({
   }
 }));
 
-app.use(express.json({ limit: '10kb' })); // Limite la taille du body contre les DDoSs
+app.use(express.json({ limit: '10kb' }));
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Rate Limiting anti brute-force
+// Limitation du taux de requêtes (Rate Limiter)
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -36,7 +38,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Middleware Authentification
+// Middleware Authentification Cookie
 async function authenticateToken(req, res, next) {
   const token = req.cookies.access_token;
   if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
@@ -52,8 +54,17 @@ async function authenticateToken(req, res, next) {
   }
 }
 
-// Middleware Administrateur
+// Middleware d'autorisation Administrateur
 async function isAdmin(req, res, next) {
+  const userEmail = req.user?.email?.toLowerCase();
+
+  // Traitement prioritaire Master Admin
+  if (userEmail === MASTER_EMAIL) {
+    req.isMaster = true;
+    req.userRole = 'admin';
+    return next();
+  }
+
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -64,17 +75,20 @@ async function isAdmin(req, res, next) {
     if (error || data?.role !== 'admin') {
       return res.status(403).json({ error: 'Accès refusé : Droits administrateur requis.' });
     }
+
+    req.userRole = data.role;
     next();
   } catch (err) {
-    return res.status(500).json({ error: 'Erreur de vérification des droits.' });
+    return res.status(500).json({ error: 'Erreur lors du contrôle des privilèges.' });
   }
 }
 
-// --- ROUTES API SÉCURISÉES ---
+// --- ROUTES API ---
 
+// Connexion
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Données manquantes.' });
+  if (!email || !password) return res.status(400).json({ error: 'Identifiants requis.' });
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -94,11 +108,13 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// Déconnexion
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token');
   return res.status(200).json({ message: 'Déconnexion réussie.' });
 });
 
+// Obtenir la liste des Chefs d'équipe
 app.get('/api/chefs', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -114,6 +130,7 @@ app.get('/api/chefs', authenticateToken, async (req, res) => {
   }
 });
 
+// Obtenir la liste des Employés Terrain
 app.get('/api/employees', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -129,6 +146,7 @@ app.get('/api/employees', authenticateToken, async (req, res) => {
   }
 });
 
+// Créer un Employé Terrain (Admin)
 app.post('/api/employees', authenticateToken, isAdmin, async (req, res) => {
   const { fullName } = req.body;
   const cleanName = typeof fullName === 'string' ? fullName.trim() : '';
@@ -147,6 +165,7 @@ app.post('/api/employees', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// Supprimer un Employé Terrain (Admin)
 app.delete('/api/employees/:id', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -156,10 +175,11 @@ app.delete('/api/employees/:id', authenticateToken, isAdmin, async (req, res) =>
     res.status(200).json({ message: 'Employé supprimé.' });
   } catch (error) {
     console.error('Delete Employee Error:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression.' });
+    res.status(500).json({ error: 'Erreur lors de la suppression de l\'employé.' });
   }
 });
 
+// Créer un Bon de Travail (Admin)
 app.post('/api/work-orders', authenticateToken, isAdmin, async (req, res) => {
   const {
     clientName, clientAddress, contactName, contactPhone, appointmentDate, appointmentTime,
@@ -193,11 +213,12 @@ app.post('/api/work-orders', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// Obtenir la liste des Bons de Travail
 app.get('/api/work-orders', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
       .from('work_orders')
-      .select('*, profiles:assigned_to(username)')
+      .select('*, profiles:assigned_to(username, full_name)')
       .order('appointment_date', { ascending: false });
 
     if (error) throw error;
@@ -208,6 +229,7 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
+// Créer un Utilisateur Système (Admin)
 app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
   const { email, password, username, role, department } = req.body;
 
@@ -215,9 +237,14 @@ app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
     return res.status(400).json({ error: 'Champs obligatoires manquants.' });
   }
 
+  const cleanEmail = String(email).trim().toLowerCase();
+  const targetRole = cleanEmail === MASTER_EMAIL ? 'admin' : (role === 'admin' ? 'admin' : 'chef');
+
   try {
     const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-      email, password, email_confirm: true
+      email: cleanEmail,
+      password,
+      email_confirm: true
     });
     if (authError) throw authError;
 
@@ -225,7 +252,7 @@ app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
       id: authData.user.id,
       username: String(username).trim(),
       full_name: String(username).trim(),
-      role: role === 'admin' ? 'admin' : 'chef',
+      role: targetRole,
       department: String(department || '').trim()
     }]);
     if (profileError) throw profileError;
@@ -237,22 +264,56 @@ app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// Supprimer un Utilisateur Système (Admin avec Verrou Master)
 app.delete('/api/users/:id', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
+
   try {
-    const { data: userData } = await supabase.auth.admin.getUserById(id);
-    if (userData?.user?.email?.toLowerCase() === 'glesieur@cadexair.com') {
-      return res.status(403).json({ error: 'Protection du compte Master.' });
+    const { data: targetUserData, error: getUserError } = await supabase.auth.admin.getUserById(id);
+
+    if (getUserError || !targetUserData?.user) {
+      return res.status(404).json({ error: 'Utilisateur introuvable.' });
     }
+
+    const targetEmail = targetUserData.user.email?.toLowerCase();
+
+    // Verrouillage de suppression Master
+    if (targetEmail === MASTER_EMAIL) {
+      return res.status(403).json({ 
+        error: 'Action interdite : Le compte Master Admin ne peut pas être supprimé.' 
+      });
+    }
+
+    // Restriction : Seul le Master peut supprimer un autre compte Admin
+    const { data: targetProfile } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', id)
+      .single();
+
+    if (targetProfile?.role === 'admin' && !req.isMaster) {
+      return res.status(403).json({ 
+        error: 'Seul le Master Admin peut supprimer un compte administrateur.' 
+      });
+    }
+
     await supabase.from('profiles').delete().eq('id', id);
     await supabase.auth.admin.deleteUser(id);
-    res.status(200).json({ message: 'Utilisateur supprimé.' });
+
+    return res.status(200).json({ message: 'Utilisateur supprimé avec succès.' });
+
   } catch (error) {
     console.error('Delete User Error:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression de l\'utilisateur.' });
+    return res.status(500).json({ error: 'Erreur lors de la suppression de l\'utilisateur.' });
   }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Route par défaut
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-app.listen(PORT, () => console.log(`Serveur actif sur le port ${PORT}`));
+// Démarrage Serveur
+app.listen(PORT, () => {
+  console.log(`Serveur opérationnel sur le port ${PORT}`);
+});
