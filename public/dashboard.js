@@ -18,47 +18,52 @@ document.addEventListener('DOMContentLoaded', async () => {
   let availableEmployees = [];
   let availableChefs = [];
 
-  // Sidebar Controls
+  // Helper de création d'options sécurisées contre le XSS
+  const createSafeOption = (value, text) => {
+    const opt = document.createElement('option');
+    opt.value = value;
+    opt.textContent = text;
+    return opt;
+  };
+
   settingsBtn?.addEventListener('click', () => sidePanel.classList.add('open'));
   closePanelBtn?.addEventListener('click', () => sidePanel.classList.remove('open'));
 
-  // Charger tous les Chefs d'équipe
   const loadChefs = async () => {
     try {
       const res = await fetch('/api/chefs');
       availableChefs = await res.json();
       if (assignedToSelect) {
-        assignedToSelect.innerHTML = '<option value="">Sélectionner un chef d\'équipe</option>';
+        assignedToSelect.innerHTML = '';
+        assignedToSelect.appendChild(createSafeOption('', "Sélectionner un chef d'équipe"));
         availableChefs.forEach(c => {
-          assignedToSelect.innerHTML += `<option value="${c.id}">${c.full_name || c.username}</option>`;
+          assignedToSelect.appendChild(createSafeOption(c.id, c.full_name || c.username));
         });
       }
     } catch (err) { console.error("Erreur chargement chefs:", err); }
   };
 
-  // Charger les Employés et mettre à jour TOUTES les listes déroulantes
   const loadEmployees = async () => {
     try {
       const res = await fetch('/api/employees');
       availableEmployees = await res.json();
 
-      // Update Liste déroulante Paramètres (Section 3)
       if (manageEmployeesSelect) {
-        manageEmployeesSelect.innerHTML = '<option value="">Sélectionner un employé à supprimer</option>';
+        manageEmployeesSelect.innerHTML = '';
+        manageEmployeesSelect.appendChild(createSafeOption('', 'Sélectionner un employé à supprimer'));
         availableEmployees.forEach(emp => {
-          manageEmployeesSelect.innerHTML += `<option value="${emp.id}">${emp.full_name}</option>`;
+          manageEmployeesSelect.appendChild(createSafeOption(emp.id, emp.full_name));
         });
       }
 
-      // Update dynamic employee selects in work order form
       const allEmpSelects = techSelectContainer.querySelectorAll('.employee-dropdown');
       allEmpSelects.forEach(select => {
         const currentVal = select.value;
-        let options = '<option value="">Sélectionner un employé</option>';
+        select.innerHTML = '';
+        select.appendChild(createSafeOption('', 'Sélectionner un employé'));
         availableEmployees.forEach(emp => {
-          options += `<option value="${emp.full_name}">${emp.full_name}</option>`;
+          select.appendChild(createSafeOption(emp.full_name, emp.full_name));
         });
-        select.innerHTML = options;
         select.value = currentVal;
       });
 
@@ -68,20 +73,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   await loadChefs();
   await loadEmployees();
 
-  // Ajouter une ligne de sélection d'employé
   const addEmployeeSelectRow = () => {
     const div = document.createElement('div');
     div.className = 'tech-select-row';
     
-    let options = '<option value="">Sélectionner un employé</option>';
+    const select = document.createElement('select');
+    select.className = 'employee-dropdown';
+    select.style.flex = '1';
+    select.appendChild(createSafeOption('', 'Sélectionner un employé'));
     availableEmployees.forEach(emp => {
-      options += `<option value="${emp.full_name}">${emp.full_name}</option>`;
+      select.appendChild(createSafeOption(emp.full_name, emp.full_name));
     });
 
-    div.innerHTML = `
-      <select class="employee-dropdown" style="flex:1;">${options}</select>
-      <button type="button" onclick="this.parentElement.remove()">X</button>
-    `;
+    const removeBtn = document.createElement('button');
+    removeBtn.type = 'button';
+    removeBtn.textContent = 'X';
+    removeBtn.onclick = () => div.remove();
+
+    div.appendChild(select);
+    div.appendChild(removeBtn);
     techSelectContainer.appendChild(div);
   };
 
@@ -91,12 +101,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   addTechBtn?.addEventListener('click', addEmployeeSelectRow);
 
-  // Génération de l'onglet/section d'entrée de temps individualisée
   generateTimeEntriesBtn?.addEventListener('click', () => {
     const chefId = assignedToSelect.value;
     const selectedChef = availableChefs.find(c => c.id === chefId);
 
-    // Extraction des employés sélectionnés
     const selectedEmpNames = [];
     const empSelects = techSelectContainer.querySelectorAll('.employee-dropdown');
     empSelects.forEach(select => {
@@ -110,34 +118,61 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     timeEntriesList.innerHTML = '';
 
-    // Entrée pour le Chef d'équipe
     if (selectedChef) {
       const chefRow = document.createElement('div');
       chefRow.className = 'time-row';
-      chefRow.innerHTML = `
-        <label>👑 Chef: ${selectedChef.full_name || selectedChef.username}</label>
-        <input type="hidden" name="techLogName[]" value="${selectedChef.full_name || selectedChef.username} (Chef)">
-        <input type="number" step="0.5" name="techLogHours[]" placeholder="Heures" required style="width:100px;">
-      `;
+
+      const label = document.createElement('label');
+      label.textContent = `👑 Chef: ${selectedChef.full_name || selectedChef.username}`;
+
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'techLogName[]';
+      hiddenInput.value = `${selectedChef.full_name || selectedChef.username} (Chef)`;
+
+      const hoursInput = document.createElement('input');
+      hoursInput.type = 'number';
+      hoursInput.step = '0.5';
+      hoursInput.name = 'techLogHours[]';
+      hoursInput.placeholder = 'Heures';
+      hoursInput.required = true;
+      hoursInput.style.width = '100px';
+
+      chefRow.appendChild(label);
+      chefRow.appendChild(hiddenInput);
+      chefRow.appendChild(hoursInput);
       timeEntriesList.appendChild(chefRow);
     }
 
-    // Entrée pour chaque Employé sélectionné
     selectedEmpNames.forEach(empName => {
       const empRow = document.createElement('div');
       empRow.className = 'time-row';
-      empRow.innerHTML = `
-        <label>👤 ${empName}</label>
-        <input type="hidden" name="techLogName[]" value="${empName}">
-        <input type="number" step="0.5" name="techLogHours[]" placeholder="Heures" required style="width:100px;">
-      `;
+
+      const label = document.createElement('label');
+      label.textContent = `👤 ${empName}`;
+
+      const hiddenInput = document.createElement('input');
+      hiddenInput.type = 'hidden';
+      hiddenInput.name = 'techLogName[]';
+      hiddenInput.value = empName;
+
+      const hoursInput = document.createElement('input');
+      hoursInput.type = 'number';
+      hoursInput.step = '0.5';
+      hoursInput.name = 'techLogHours[]';
+      hoursInput.placeholder = 'Heures';
+      hoursInput.required = true;
+      hoursInput.style.width = '100px';
+
+      empRow.appendChild(label);
+      empRow.appendChild(hiddenInput);
+      empRow.appendChild(hoursInput);
       timeEntriesList.appendChild(empRow);
     });
 
     timeEntriesPanel.style.display = 'block';
   });
 
-  // Soumission Bon de travail
   workOrderForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(workOrderForm);
@@ -184,7 +219,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Section 1 : Nouveau Chef d'équipe
   createUserForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(createUserForm);
@@ -206,7 +240,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Section 2 : Ajouter Employé Terrain (Met à jour automatiquement la liste)
   createEmployeeForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(createEmployeeForm);
@@ -221,14 +254,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (res.ok) {
       alert('Employé terrain ajouté !');
       createEmployeeForm.reset();
-      await loadEmployees(); // Rafraîchit immédiatement toutes les listes déroulantes
+      await loadEmployees();
     } else {
       const err = await res.json();
       alert('Erreur : ' + err.error);
     }
   });
 
-  // Section 3 : Supprimer Employé
   deleteEmployeeBtn?.addEventListener('click', async () => {
     const selectedId = manageEmployeesSelect.value;
     if (!selectedId) return alert('Veuillez sélectionner un employé à supprimer.');
@@ -239,14 +271,13 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     if (res.ok) {
       alert('Employé supprimé !');
-      await loadEmployees(); // Rafraîchit les listes déroulantes
+      await loadEmployees();
     } else {
       const err = await res.json();
       alert('Erreur : ' + err.error);
     }
   });
 
-  // Logout
   logoutBtn?.addEventListener('click', async () => {
     await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/index.html';
