@@ -8,7 +8,7 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
-// Configuration du proxy pour Render (Capture correcte des adresses IP)
+// Configuration du proxy pour Render
 app.set('trust proxy', 1);
 
 // Variables Supabase
@@ -37,13 +37,13 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-// Middlewares d'analyse de requêtes
+// Middlewares
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
-// Protection CSRF / Vérification d'origine des requêtes de modification
+// Protection CSRF
 const csrfOriginCheck = (req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers['origin'] || req.headers['referer'];
@@ -56,7 +56,7 @@ const csrfOriginCheck = (req, res, next) => {
 };
 app.use(csrfOriginCheck);
 
-// Limitateurs de requêtes (Rate Limiting)
+// Rate Limiting
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -70,13 +70,13 @@ const loginLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
-// Helper pour l'enregistrement des journaux d'audit
+// Helper Journal d'audit
 const logAuditEvent = async (action, performedBy, targetUser, req) => {
   try {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
     const userAgent = req.headers['user-agent'] || 'Unknown';
 
-    const { error } = await supabaseAdmin.from('audit_logs').insert([
+    await supabaseAdmin.from('audit_logs').insert([
       {
         action,
         performed_by: performedBy || 'Système',
@@ -85,25 +85,21 @@ const logAuditEvent = async (action, performedBy, targetUser, req) => {
         user_agent: userAgent
       }
     ]);
-
-    if (error) {
-      console.error("❌ ERREUR SUPABASE AUDIT LOG:", error.message, error.details);
-    }
   } catch (err) {
     console.error("❌ EXCEPTION AUDIT LOG:", err);
   }
 };
 
-// Validation de la robustesse des mots de passe
+// Validation mot de passe
 const isPasswordStrong = (password) => {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/.test(password);
 };
 
-// Middleware d'authentification et d'extraction du profil
+// Middleware d'authentification
 const attachUserProfile = async (req, res, next) => {
   try {
     const token = req.cookies.access_token;
-    if (!token) return res.status(401).json({ error: 'Accès non autorisé (aucun jeton).' });
+    if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
 
     const { data: { user }, error } = await supabase.auth.getUser(token);
     if (error || !user) {
@@ -124,14 +120,14 @@ const attachUserProfile = async (req, res, next) => {
 
     next();
   } catch (err) {
-    console.error("❌ Erreur dans attachUserProfile:", err);
-    return res.status(500).json({ error: "Erreur interne lors de l'authentification." });
+    console.error("❌ Erreur attachUserProfile:", err);
+    return res.status(500).json({ error: "Erreur interne d'authentification." });
   }
 };
 
 // --- ROUTES API ---
 
-// 1. Authentification / Connexion
+// 1. Connexion
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -153,7 +149,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   res.json({ message: 'Connexion réussie.' });
 });
 
-// 2. Création d'utilisateur hiérarchisé
+// 2. Création d'utilisateur (AVEC UPSERT ET ROLLBACK SÉCURISÉ)
 app.post('/api/create-user', attachUserProfile, async (req, res) => {
   const { email, password, username, role, department } = req.body;
   const callerRole = req.profile.role;
@@ -176,6 +172,7 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
     });
   }
 
+  // Étape A : Création dans Supabase Auth
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
@@ -187,20 +184,25 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
     return res.status(400).json({ error: authError.message });
   }
 
-  // Insertion sans la colonne email si elle n'existe pas dans le schéma
-  const { error: profileError } = await supabaseAdmin.from('profiles').insert([
-    { id: authData.user.id, username, role, department }
-  ]);
+  // Étape B : Enregistrement/Mise à jour du profil via UPSERT
+  const { error: profileError } = await supabaseAdmin
+    .from('profiles')
+    .upsert([
+      { id: authData.user.id, username, role, department }
+    ], { onConflict: 'id' });
 
+  // Étape C : Rollback si échec du profil
   if (profileError) {
-    return res.status(400).json({ error: "Erreur lors de l'enregistrement du profil." });
+    console.error("❌ Erreur Profil:", profileError.message);
+    await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
+    return res.status(400).json({ error: `Impossible d'enregistrer le profil : ${profileError.message}` });
   }
 
   await logAuditEvent(`CREATE_${role.toUpperCase()}_SUCCESS`, req.user.email, email, req);
   res.status(201).json({ message: `Compte ${role} créé avec succès pour ${username}.` });
 });
 
-// 3. Obtenir la liste des chefs d'équipe (Corrigé : retrait du champ 'email')
+// 3. Obtenir les chefs d'équipe
 app.get('/api/chefs', attachUserProfile, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
@@ -208,15 +210,10 @@ app.get('/api/chefs', attachUserProfile, async (req, res) => {
       .select('id, username, department, role')
       .eq('role', 'chef_equipe');
 
-    if (error) {
-      console.error("❌ Erreur Supabase /api/chefs:", error.message, error.details);
-      return res.status(400).json({ error: error.message });
-    }
-
+    if (error) return res.status(400).json({ error: error.message });
     res.json(data || []);
   } catch (err) {
-    console.error("❌ Exception /api/chefs:", err);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des chefs d'équipe." });
+    res.status(500).json({ error: "Erreur serveur lors de la récupération des chefs." });
   }
 });
 
@@ -225,9 +222,7 @@ app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   const callerRole = req.profile.role;
 
   if (!['master', 'admin'].includes(callerRole)) {
-    return res.status(403).json({ 
-      error: 'Permission refusée. Seuls les Administrateurs et le Master peuvent créer des bons de travail.' 
-    });
+    return res.status(403).json({ error: 'Permission refusée.' });
   }
 
   const { 
@@ -237,7 +232,7 @@ app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   } = req.body;
 
   if (!title || !description || !department || !assignedTo) {
-    return res.status(400).json({ error: 'Tous les champs requis du bon de travail doivent être remplis.' });
+    return res.status(400).json({ error: 'Tous les champs requis doivent être remplis.' });
   }
 
   const { error } = await supabaseAdmin.from('work_orders').insert([
@@ -257,13 +252,8 @@ app.post('/api/work-orders', attachUserProfile, async (req, res) => {
     }
   ]);
 
-  if (error) {
-    await logAuditEvent('CREATE_WORK_ORDER_FAILED', req.user.email, title, req);
-    return res.status(400).json({ error: error.message });
-  }
-
-  await logAuditEvent('CREATE_WORK_ORDER_SUCCESS', req.user.email, title, req);
-  res.status(201).json({ message: 'Bon de travail créé et attribué avec succès.' });
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({ message: 'Bon de travail créé avec succès.' });
 });
 
 // 5. Récupération des bons de travail
@@ -274,19 +264,14 @@ app.get('/api/work-orders', attachUserProfile, async (req, res) => {
       .select('*, profiles!assigned_to(username)')
       .order('created_at', { ascending: false });
 
-    if (error) {
-      console.error("❌ Erreur récupération work_orders:", error.message, error.details);
-      return res.status(400).json({ error: error.message });
-    }
-
+    if (error) return res.status(400).json({ error: error.message });
     res.json(data || []);
   } catch (err) {
-    console.error("❌ Exception /api/work-orders:", err);
-    res.status(500).json({ error: "Erreur serveur lors de la récupération des bons de travail." });
+    res.status(500).json({ error: "Erreur serveur lors de la récupération des bons." });
   }
 });
 
-// 6. Ajout / Mise à jour des photos terrain par le chef d'équipe
+// 6. Ajout des photos
 app.post('/api/work-orders/:id/photos', attachUserProfile, async (req, res) => {
   const { id } = req.params;
   const { photos } = req.body;
@@ -297,7 +282,7 @@ app.post('/api/work-orders/:id/photos', attachUserProfile, async (req, res) => {
     .eq('id', id);
 
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ message: 'Photos enregistrées et bon de travail complété.' });
+  res.json({ message: 'Photos enregistrées et bon complété.' });
 });
 
 // 7. Déconnexion
