@@ -5,6 +5,8 @@ document.addEventListener('DOMContentLoaded', async () => {
   const workOrderForm = document.getElementById('work-order-form');
   const createUserForm = document.getElementById('create-user-form');
   const createEmployeeForm = document.getElementById('create-employee-form');
+  const deleteEmployeeBtn = document.getElementById('delete-employee-btn');
+  const manageEmployeesSelect = document.getElementById('manage-employees-select');
   const addTechBtn = document.getElementById('add-tech-btn');
   const techContainer = document.getElementById('technicians-container');
   const logoutBtn = document.getElementById('logout-btn');
@@ -12,11 +14,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let availableEmployees = [];
 
-  // Sidebar toggles
+  // Sidebar controls
   settingsBtn?.addEventListener('click', () => sidePanel.classList.add('open'));
   closePanelBtn?.addEventListener('click', () => sidePanel.classList.remove('open'));
 
-  // Chargement des Chefs
+  // Charger les Chefs
   const loadChefs = async () => {
     try {
       const res = await fetch('/api/chefs');
@@ -30,18 +32,26 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (err) { console.error(err); }
   };
 
-  // Chargement des Employés Terrain
+  // Charger les Employés et rafraîchir la liste déroulante d'administration (Section 3)
   const loadEmployees = async () => {
     try {
       const res = await fetch('/api/employees');
       availableEmployees = await res.json();
+
+      // Mise à jour du menu déroulant de suppression (Section 3)
+      if (manageEmployeesSelect) {
+        manageEmployeesSelect.innerHTML = '<option value="">Sélectionner un employé à supprimer</option>';
+        availableEmployees.forEach(emp => {
+          manageEmployeesSelect.innerHTML += `<option value="${emp.id}">${emp.full_name}</option>`;
+        });
+      }
     } catch (err) { console.error(err); }
   };
 
   await loadChefs();
   await loadEmployees();
 
-  // Génération d'une ligne d'entrée de temps avec la liste des employés
+  // Fonction pour ajouter une ligne d'entrée de temps dans le bon
   const createTechRow = () => {
     const div = document.createElement('div');
     div.className = 'tech-row';
@@ -59,7 +69,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     techContainer.appendChild(div);
   };
 
-  // Ajout par défaut d'une première ligne
   if (techContainer && techContainer.children.length === 0) {
     createTechRow();
   }
@@ -102,7 +111,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // Soumission Formulaire 1 : Créer Utilisateur
+  // Section 1 : Nouveau Chef d'équipe
   createUserForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(createUserForm);
@@ -115,7 +124,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     if (res.ok) {
-      alert('Utilisateur système créé !');
+      alert('Nouveau chef d\'équipe créé !');
       createUserForm.reset();
       await loadChefs();
     } else {
@@ -124,7 +133,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
   });
 
-  // NOUVEAU - Soumission Formulaire 2 : Créer Employé Terrain
+  // Section 2 : Ajouter Employé Terrain
   createEmployeeForm?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const formData = new FormData(createEmployeeForm);
@@ -137,16 +146,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
     if (res.ok) {
-      alert('Employé terrain créé !');
+      alert('Employé terrain ajouté !');
       createEmployeeForm.reset();
-      await loadEmployees(); // Met à jour la liste pour les bons
+      await loadEmployees();
     } else {
       const err = await res.json();
       alert('Erreur : ' + err.error);
     }
   });
 
-  // Logout
+  // Section 3 : Supprimer un Employé sélectionné dans la liste déroulante
+  deleteEmployeeBtn?.addEventListener('click', async () => {
+    const selectedId = manageEmployeesSelect.value;
+    if (!selectedId) {
+      alert('Veuillez sélectionner un employé à supprimer.');
+      return;
+    }
+
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cet employé ?')) return;
+
+    const res = await fetch(`/api/employees/${selectedId}`, {
+      method: 'DELETE'
+    });
+
+    if (res.ok) {
+      alert('Employé supprimé avec succès !');
+      await loadEmployees();
+    } else {
+      const err = await res.json();
+      alert('Erreur : ' + err.error);
+    }
+  });
+
+  // Déconnexion
   logoutBtn?.addEventListener('click', async () => {
     await fetch('/api/logout', { method: 'POST' });
     window.location.href = '/index.html';
