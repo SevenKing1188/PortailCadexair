@@ -1,138 +1,314 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="UTF-8">
-  <title>Cadexair - Portal v3.1</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadexair - Administration</title>
   <style>
     :root {
-      --bg-black: #0d0d0d;
-      --card-bg: #171717;
-      --accent-red: #e50914;
-      --accent-red-hover: #b80710;
-      --text-white: #ffffff;
-      --text-gray: #a3a3a3;
-      --border-color: #262626;
+      --bg-color: #000000;
+      --card-bg: #111827;
+      --accent-color: #dc2626;
+      --accent-hover: #b91c1c;
+      --text-color: #f8fafc;
+      --text-muted: #94a3b8;
+      --border-color: #1f2937;
     }
 
-    body { margin: 0; font-family: 'Segoe UI', Roboto, sans-serif; background: var(--bg-black); color: var(--text-white); }
-    header { background: var(--card-bg); padding: 1rem 2rem; border-bottom: 2px solid var(--accent-red); display: flex; justify-content: space-between; align-items: center; }
-    header h1 { margin: 0; color: var(--accent-red); font-size: 1.5rem; text-transform: uppercase; }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+    }
 
-    .btn-settings { background: none; border: none; color: var(--text-white); font-size: 1.5rem; cursor: pointer; }
+    body {
+      background-color: var(--bg-color);
+      color: var(--text-color);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-    .sidebar { position: fixed; top: 0; right: -400px; width: 350px; height: 100%; background: var(--card-bg); border-left: 2px solid var(--accent-red); transition: 0.3s; padding: 1.5rem; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; z-index: 100; }
-    .sidebar.open { right: 0; }
-    .sidebar-header { display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
-    .sidebar-footer { font-size: 0.8rem; color: var(--text-gray); text-align: center; border-top: 1px solid var(--border-color); padding-top: 1rem; }
+    header {
+      background-color: var(--card-bg);
+      border-bottom: 1px solid var(--border-color);
+      padding: 16px 24px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
 
-    .container { display: grid; grid-template-columns: 1fr 1fr; gap: 2rem; padding: 2rem; max-width: 1400px; margin: 0 auto; }
-    .card { background: var(--card-bg); border: 1px solid var(--border-color); border-radius: 8px; padding: 1.5rem; }
-    
-    .form-row { display: flex; gap: 1rem; }
-    .form-group { margin-bottom: 1rem; flex: 1; }
-    label { display: block; margin-bottom: 0.3rem; color: var(--text-gray); font-size: 0.85rem; }
-    input, select, textarea { width: 100%; padding: 0.6rem; background: var(--bg-black); border: 1px solid var(--border-color); color: var(--text-white); border-radius: 4px; box-sizing: border-box; }
+    .header-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      color: var(--accent-color);
+    }
 
-    button { width: 100%; padding: 0.75rem; background: var(--accent-red); color: white; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
-    button:hover { background: var(--accent-red-hover); }
+    .header-actions button {
+      background: none;
+      border: 1px solid var(--border-color);
+      color: var(--text-color);
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-left: 8px;
+    }
 
-    .history-item { background: var(--bg-black); border: 1px solid var(--border-color); padding: 1rem; margin-bottom: 0.5rem; border-radius: 4px; cursor: pointer; display: flex; justify-content: space-between; }
-    .history-item:hover { border-color: var(--accent-red); }
+    .main-container {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      padding: 24px;
+      max-width: 1400px;
+      margin: 0 auto;
+      width: 100%;
+    }
 
-    .modal { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); justify-content: center; align-items: center; z-index: 200; }
-    .modal-content { background: var(--card-bg); padding: 2rem; border-radius: 8px; max-width: 600px; width: 90%; max-height: 80vh; overflow-y: auto; border: 1px solid var(--accent-red); }
+    @media (max-width: 900px) {
+      .main-container {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 24px;
+    }
+
+    .card h2 {
+      margin-bottom: 20px;
+      font-size: 1.2rem;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 8px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.875rem;
+      color: var(--text-muted);
+    }
+
+    .form-group input, .form-group select, .form-group textarea {
+      width: 100%;
+      padding: 10px;
+      background-color: #000000;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      color: var(--text-color);
+      font-size: 0.95rem;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .btn-primary {
+      background-color: var(--accent-color);
+      color: white;
+      border: none;
+      padding: 10px 16px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .history-item {
+      padding: 12px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      margin-bottom: 8px;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .sidebar {
+      position: fixed;
+      right: -350px;
+      top: 0;
+      width: 350px;
+      height: 100%;
+      background-color: var(--card-bg);
+      border-left: 1px solid var(--border-color);
+      transition: right 0.3s ease;
+      padding: 24px;
+      z-index: 100;
+    }
+
+    .sidebar.open {
+      right: 0;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      justify-content: center;
+      align-items: center;
+      z-index: 200;
+    }
+
+    .modal-content {
+      background-color: var(--card-bg);
+      padding: 24px;
+      border-radius: 8px;
+      max-width: 500px;
+      width: 100%;
+      border: 1px solid var(--border-color);
+    }
   </style>
 </head>
 <body>
 
   <header>
-    <h1>Cadexair - Administration</h1>
-    <button class="btn-settings" id="openSettings">⚙️</button>
+    <div class="header-title">CADEXAIR - ADMINISTRATION</div>
+    <div class="header-actions">
+      <button id="openSettings">Paramètres</button>
+      <button id="logoutBtn">Déconnexion</button>
+    </div>
   </header>
 
-  <!-- Panneau Latéral Paramètres -->
-  <div class="sidebar" id="sidebar">
-    <div>
-      <div class="sidebar-header">
-        <h2>Paramètres</h2>
-        <button id="closeSettings" style="width:auto;">✕</button>
-      </div>
-
-      <div style="margin-top: 1.5rem;">
-        <h3>Création d'Utilisateur</h3>
-        <form id="createUserForm">
-          <div class="form-group"><label>Nom d'utilisateur</label><input type="text" id="username" required></div>
-          <div class="form-group"><label>Courriel</label><input type="email" id="email" required></div>
-          <div class="form-group"><label>Mot de passe</label><input type="password" id="password" required></div>
-          <div class="form-group">
-            <label>Type de compte</label>
-            <select id="role"><option value="chef_equipe">Chef d'équipe</option><option value="admin">Admin secondaire</option></select>
-          </div>
-          <div class="form-group">
-            <label>Département</label>
-            <select id="department"><option value="Ventilation">Ventilation</option><option value="Propreté">Propreté</option><option value="Maintenance">Maintenance</option></select>
-          </div>
-          <button type="submit">Créer l'utilisateur</button>
-        </form>
-      </div>
-
-      <div style="margin-top: 2rem;">
-        <button id="logoutBtn">Déconnexion</button>
-      </div>
-    </div>
-
-    <div class="sidebar-footer">
-      fait par Guillaume.L pour Cadexair 2026. version 3.1
-    </div>
-  </div>
-
-  <!-- Contenu Principal -->
-  <div class="container">
+  <div class="main-container">
+    <!-- Formulaire Bon de Travail -->
     <div class="card">
       <h2>Créer un Bon de Travail</h2>
       <form id="workOrderForm">
-        <div class="form-group"><label>Titre de la tâche</label><input type="text" id="woTitle" required></div>
-        
-        <h3>Informations Client</h3>
-        <div class="form-group"><label>Nom du Client</label><input type="text" id="clientName" required></div>
-        <div class="form-group"><label>Adresse Complète</label><input type="text" id="clientAddress" required></div>
-        <div class="form-row">
-          <div class="form-group"><label>Date de Rendez-vous</label><input type="date" id="appointmentDate" required></div>
-          <div class="form-group"><label>Heure</label><input type="time" id="appointmentTime" required></div>
-        </div>
-
-        <div class="form-row">
-          <div class="form-group"><label>Nb Hottes</label><input type="number" id="nbHottes" value="0"></div>
-          <div class="form-group"><label>Nb Portes d'accès</label><input type="number" id="nbPortesAcces" value="0"></div>
-          <div class="form-group"><label>Nb Ventilateurs</label><input type="number" id="nbVentilateurs" value="0"></div>
+        <div class="form-group">
+          <label for="woTitle">Titre de la tâche</label>
+          <input type="text" id="woTitle" name="woTitle" autocomplete="off" required />
         </div>
 
         <div class="form-group">
-          <label>Département</label>
-          <select id="woDepartment"><option value="Ventilation">Ventilation</option><option value="Propreté">Propreté</option><option value="Maintenance">Maintenance</option></select>
+          <label for="clientName">Nom du Client</label>
+          <input type="text" id="clientName" name="clientName" autocomplete="organization" required />
         </div>
-        <div class="form-group"><label>Assigner à un Chef d'équipe</label><select id="woAssignee"></select></div>
-        <div class="form-group"><label>Description des travaux</label><textarea id="woDescription" rows="3" required></textarea></div>
-        <button type="submit">Attribuer le Bon de Travail</button>
+
+        <div class="form-group">
+          <label for="clientAddress">Adresse Complète</label>
+          <input type="text" id="clientAddress" name="clientAddress" autocomplete="street-address" required />
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="appointmentDate">Date</label>
+            <input type="date" id="appointmentDate" name="appointmentDate" autocomplete="off" required />
+          </div>
+          <div class="form-group">
+            <label for="appointmentTime">Heure</label>
+            <input type="time" id="appointmentTime" name="appointmentTime" autocomplete="off" required />
+          </div>
+          <div class="form-group">
+            <label for="woDepartment">Département</label>
+            <select id="woDepartment" name="woDepartment" autocomplete="off">
+              <option value="Nettoyage">Nettoyage</option>
+              <option value="Installation">Installation</option>
+              <option value="Service">Service</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="nbHottes">Nb Hottes</label>
+            <input type="number" id="nbHottes" name="nbHottes" value="0" min="0" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="nbPortesAcces">Nb Portes d'accès</label>
+            <input type="number" id="nbPortesAcces" name="nbPortesAcces" value="0" min="0" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="nbVentilateurs">Nb Ventilateurs</label>
+            <input type="number" id="nbVentilateurs" name="nbVentilateurs" value="0" min="0" autocomplete="off" />
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="woAssignee">Assigner à (Chef d'équipe)</label>
+          <select id="woAssignee" name="woAssignee" autocomplete="off" required></select>
+        </div>
+
+        <div class="form-group">
+          <label for="woDescription">Description / Instructions</label>
+          <textarea id="woDescription" name="woDescription" rows="4" autocomplete="off" required></textarea>
+        </div>
+
+        <button type="submit" class="btn-primary">Créer et Attribuer</button>
       </form>
     </div>
 
+    <!-- Historique des Bons de Travail -->
     <div class="card">
       <h2>Historique des Bons de Travail</h2>
       <div id="historyList">Chargement...</div>
     </div>
   </div>
 
-  <!-- Modal Détails -->
+  <!-- Panneau Paramètres / Création d'Utilisateur -->
+  <div class="sidebar" id="sidebar">
+    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <h3>Créer un Utilisateur</h3>
+      <button id="closeSettings" style="background: none; border: none; color: white; cursor: pointer;">✕</button>
+    </div>
+    <form id="createUserForm">
+      <div class="form-group">
+        <label for="username">Nom d'utilisateur</label>
+        <input type="text" id="username" name="username" autocomplete="username" required />
+      </div>
+      <div class="form-group">
+        <label for="email">Adresse courriel</label>
+        <input type="email" id="email" name="email" autocomplete="email" required />
+      </div>
+      <div class="form-group">
+        <label for="password">Mot de passe</label>
+        <input type="password" id="password" name="password" autocomplete="new-password" required />
+      </div>
+      <div class="form-group">
+        <label for="role">Rôle</label>
+        <select id="role" name="role" autocomplete="off">
+          <option value="chef_equipe">Chef d'équipe</option>
+          <option value="admin">Administrateur</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="department">Département</label>
+        <select id="department" name="department" autocomplete="off">
+          <option value="Nettoyage">Nettoyage</option>
+          <option value="Installation">Installation</option>
+          <option value="Service">Service</option>
+        </select>
+      </div>
+      <button type="submit" class="btn-primary">Créer le compte</button>
+    </form>
+  </div>
+
+  <!-- Modale Détails -->
   <div class="modal" id="detailsModal">
     <div class="modal-content">
-      <h2 id="modalTitle">Détails du Bon de Travail</h2>
-      <div id="modalBody"></div>
-      <button id="closeModalBtn" style="margin-top:1rem;">Fermer</button>
+      <h3 id="modalTitle" style="margin-bottom: 12px; color: var(--accent-color);"></h3>
+      <div id="modalBody" style="margin-bottom: 20px; font-size: 0.95rem; line-height: 1.5;"></div>
+      <button id="closeModalBtn" class="btn-primary">Fermer</button>
     </div>
   </div>
 
-  <!-- Chargement sécurisé du script externe -->
   <script src="/dashboard.js"></script>
 </body>
 </html>

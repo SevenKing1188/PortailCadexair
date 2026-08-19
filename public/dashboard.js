@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const detailsModal = document.getElementById('detailsModal');
   const closeModalBtn = document.getElementById('closeModalBtn');
 
-  // Gestion du Panneau Paramètres Latéral
+  // Affichage/Masquage du panneau latéral
   if (openSettings) {
     openSettings.addEventListener('click', () => sidebar.classList.add('open'));
   }
@@ -17,27 +17,27 @@ document.addEventListener('DOMContentLoaded', () => {
     closeSettings.addEventListener('click', () => sidebar.classList.remove('open'));
   }
 
-  // Déconnexion avec redirection forcée vers la page d'accueil/connexion
+  // Déconnexion avec redirection
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
         await fetch('/api/logout', { method: 'POST' });
       } catch (err) {
-        console.error("Erreur réseau lors de la déconnexion :", err);
+        console.error("Erreur déconnexion :", err);
       } finally {
         window.location.href = '/index.html';
       }
     });
   }
 
-  // Fermeture de la Fenêtre Modale de détails
+  // Fermeture de la modale de détails
   if (closeModalBtn) {
     closeModalBtn.addEventListener('click', () => {
       detailsModal.style.display = 'none';
     });
   }
 
-  // Chargement dynamique de la liste des chefs d'équipe avec leur Nom d'utilisateur (username)
+  // Chargement des chefs d'équipe
   async function loadChefs() {
     try {
       const res = await fetch('/api/chefs');
@@ -55,11 +55,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     } catch (err) {
-      console.error("Erreur lors du chargement des chefs d'équipe :", err);
+      console.error("Erreur lors du chargement des chefs :", err);
     }
   }
 
-  // Chargement de l'historique complet des bons de travail
+  // Chargement de l'historique
   async function loadHistory() {
     try {
       const res = await fetch('/api/work-orders');
@@ -67,7 +67,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const orders = await res.json();
         if (historyList) {
           if (orders.length === 0) {
-            historyList.innerHTML = '<p style="color: var(--text-gray);">Aucun bon de travail enregistré.</p>';
+            historyList.innerHTML = '<p style="color: var(--text-muted);">Aucun bon de travail enregistré.</p>';
             return;
           }
           historyList.innerHTML = orders.map(o => `
@@ -77,7 +77,6 @@ document.addEventListener('DOMContentLoaded', () => {
             </div>
           `).join('');
 
-          // Écouteur de clic pour ouvrir la vue détaillée
           document.querySelectorAll('.history-item').forEach(item => {
             item.addEventListener('click', () => {
               const id = item.getAttribute('data-id');
@@ -92,7 +91,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Affichage des détails d'un bon de travail dans la modale
+  // Affichage des détails d'un bon de travail
   function showOrderDetails(o) {
     const assignedName = o.profiles ? o.profiles.username : 'Non assigné';
     document.getElementById('modalTitle').innerText = o.title;
@@ -100,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
       <p><strong>Client :</strong> ${o.client_name || 'N/A'}</p>
       <p><strong>Adresse :</strong> ${o.client_address || 'N/A'}</p>
       <p><strong>Rendez-vous :</strong> ${o.appointment_date || ''} à ${o.appointment_time || ''}</p>
-      <p><strong>Équipements :</strong> ${o.nb_hottes} Hotte(s), ${o.nb_portes_acces} Porte(s) d'accès, ${o.nb_ventilateurs} Ventilateur(s)</p>
+      <p><strong>Équipements :</strong> ${o.nb_hottes} Hotte(s), ${o.nb_portes_acces} Porte(s), ${o.nb_ventilateurs} Ventilateur(s)</p>
       <p><strong>Département :</strong> ${o.department}</p>
       <p><strong>Assigné à :</strong> ${assignedName}</p>
       <p><strong>Description :</strong> ${o.description}</p>
@@ -109,7 +108,7 @@ document.addEventListener('DOMContentLoaded', () => {
     detailsModal.style.display = 'flex';
   }
 
-  // Soumission : Création d'Utilisateur dans le panneau latéral
+  // Soumission : Création d'utilisateur
   if (createUserForm) {
     createUserForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -135,7 +134,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Soumission : Création de Bon de Travail
+  // Soumission : Création de bon de travail
   if (workOrderForm) {
     workOrderForm.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -167,7 +166,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Exécution au démarrage
   loadChefs();
   loadHistory();
 });
