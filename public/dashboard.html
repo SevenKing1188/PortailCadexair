@@ -3,94 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tableau de bord - Bons de Travail</title>
+  <title>Tableau de bord - Cadexair</title>
   <style>
-    body {
-      font-family: sans-serif;
-      margin: 20px;
-      background-color: #f4f4f9;
-    }
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      background: #fff;
-      padding: 10px 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-    .card {
-      background: #fff;
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
-    }
-    .form-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 10px;
-    }
-    .form-group {
-      margin-bottom: 10px;
-      display: flex;
-      flex-direction: column;
-    }
-    input, select, textarea {
-      padding: 8px;
-      margin-top: 4px;
-    }
-    button {
-      padding: 8px 16px;
-      cursor: pointer;
-    }
+    body { font-family: sans-serif; margin: 20px; background-color: #f4f4f9; }
+    header { display: flex; justify-content: space-between; align-items: center; background: #fff; padding: 10px 20px; border-radius: 8px; margin-bottom: 20px; }
+    .card { background: #fff; padding: 20px; border-radius: 8px; margin-bottom: 20px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
+    .form-group { margin-bottom: 10px; display: flex; flex-direction: column; }
+    input, select, textarea { padding: 8px; margin-top: 4px; }
+    button { padding: 8px 16px; cursor: pointer; }
 
-    /* Style minimal requis pour le panneau latéral coulissant */
-    .side-panel {
-      position: fixed;
-      top: 0;
-      right: -350px; /* Caché hors de l'écran */
-      width: 320px;
-      height: 100%;
-      background: #fff;
-      box-shadow: -2px 0 5px rgba(0,0,0,0.2);
-      transition: right 0.3s ease;
-      padding: 20px;
-      box-sizing: border-box;
-      z-index: 1000;
-    }
-    .side-panel.open {
-      right: 0; /* S'affiche quand la classe 'open' est ajoutée */
-    }
-    .panel-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid #ddd;
-      padding-bottom: 10px;
-    }
-    .btn-close {
-      background: none;
-      border: none;
-      font-size: 20px;
-    }
-
-    /* Grille d'affichage des cartes */
-    .orders-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-      gap: 15px;
-    }
-    .work-order-card {
-      background: #fff;
-      border: 1px solid #ccc;
-      padding: 15px;
-      border-radius: 6px;
-    }
+    /* Sidebar */
+    .side-panel { position: fixed; top: 0; right: -350px; width: 320px; height: 100%; background: #fff; box-shadow: -2px 0 5px rgba(0,0,0,0.2); transition: right 0.3s ease; padding: 20px; z-index: 1000; overflow-y: auto; }
+    .side-panel.open { right: 0; }
+    .tech-row { display: flex; gap: 10px; margin-bottom: 5px; }
   </style>
 </head>
 <body>
 
-  <!-- Barre de navigation -->
   <header>
     <h1>Gestion des Bons</h1>
     <div>
@@ -99,108 +29,60 @@
     </div>
   </header>
 
-  <!-- Formulaire Bon de Travail -->
+  <!-- FORMULAIRE BON DE TRAVAIL -->
   <section class="card">
     <h2>Nouveau Bon de Travail</h2>
     <form id="work-order-form">
       <div class="form-grid">
-        <div class="form-group">
-          <label for="title">Titre</label>
-          <input type="text" id="title" name="title" required>
-        </div>
-        <div class="form-group">
-          <label for="clientName">Nom Client</label>
-          <input type="text" id="clientName" name="clientName" required>
-        </div>
-        <div class="form-group">
-          <label for="clientAddress">Adresse</label>
-          <input type="text" id="clientAddress" name="clientAddress" required>
-        </div>
-        <div class="form-group">
-          <label for="department">Département</label>
-          <input type="text" id="department" name="department">
-        </div>
-        <div class="form-group">
-          <label for="appointmentDate">Date</label>
-          <input type="date" id="appointmentDate" name="appointmentDate" required>
-        </div>
-        <div class="form-group">
-          <label for="appointmentTime">Heure</label>
-          <input type="time" id="appointmentTime" name="appointmentTime" required>
-        </div>
-        <div class="form-group">
-          <label for="assignedTo">Chef d'équipe</label>
-          <select id="assignedTo" name="assignedTo">
-            <option value="">Chargement...</option>
-          </select>
-        </div>
+        <div class="form-group"><label>Nom Client</label><input type="text" name="clientName" required></div>
+        <div class="form-group"><label>Adresse</label><input type="text" name="clientAddress" required></div>
+        <div class="form-group"><label>Département</label><input type="text" name="department"></div>
+        <div class="form-group"><label>Date</label><input type="date" name="appointmentDate" required></div>
+        <div class="form-group"><label>Heure</label><input type="time" name="appointmentTime" required></div>
+        <div class="form-group"><label>Chef d'équipe</label><select name="assignedTo" id="assignedTo"><option value="">Chargement...</option></select></div>
       </div>
 
-      <div class="form-grid">
-        <div class="form-group">
-          <label for="nbHottes">Hottes</label>
-          <input type="number" id="nbHottes" name="nbHottes" value="0">
-        </div>
-        <div class="form-group">
-          <label for="nbPortesAcces">Portes</label>
-          <input type="number" id="nbPortesAcces" name="nbPortesAcces" value="0">
-        </div>
-        <div class="form-group">
-          <label for="nbVentilateurs">Ventilateurs</label>
-          <input type="number" id="nbVentilateurs" name="nbVentilateurs" value="0">
+      <h3>Techniciens et temps de travail</h3>
+      <div id="technicians-container">
+        <div class="tech-row">
+          <input type="text" name="techName[]" placeholder="Nom technicien" required>
+          <input type="number" name="techHours[]" placeholder="Heures" required>
         </div>
       </div>
+      <button type="button" id="add-tech-btn">+ Ajouter technicien</button>
 
-      <div class="form-group">
-        <label for="description">Description</label>
-        <textarea id="description" name="description" rows="3"></textarea>
+      <div class="form-group" style="margin-top:20px;">
+        <label>Description</label>
+        <textarea name="description" rows="3"></textarea>
       </div>
-
       <button type="submit">Créer le bon</button>
     </form>
   </section>
 
-  <!-- Liste des Bons -->
+  <!-- LISTE DES BONS -->
   <section class="card">
-    <h2>Bons de travail récents</h2>
-    <div id="work-orders-list" class="orders-grid"></div>
+    <h2>Bons récents</h2>
+    <div id="work-orders-list"></div>
   </section>
 
-  <!-- Panneau Latéral Coulissant -->
+  <!-- PANNEAU PARAMÈTRES (Sidebar) -->
   <aside id="side-panel" class="side-panel">
-    <div class="panel-header">
+    <div style="display:flex; justify-content:space-between;">
       <h3>Paramètres</h3>
-      <button id="close-panel-btn" class="btn-close">&times;</button>
+      <button id="close-panel-btn">X</button>
     </div>
-    <div class="panel-body">
-      <h4>Ajouter un Utilisateur</h4>
-      <form id="create-user-form">
-        <div class="form-group">
-          <label for="user-username">Nom d'utilisateur</label>
-          <input type="text" id="user-username" name="username" required>
-        </div>
-        <div class="form-group">
-          <label for="user-email">E-mail</label>
-          <input type="email" id="user-email" name="email" required>
-        </div>
-        <div class="form-group">
-          <label for="user-password">Mot de passe</label>
-          <input type="password" id="user-password" name="password" required>
-        </div>
-        <div class="form-group">
-          <label for="user-role">Rôle</label>
-          <select id="user-role" name="role" required>
-            <option value="chef">Chef d'équipe</option>
-            <option value="admin">Administrateur</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="user-dept">Département</label>
-          <input type="text" id="user-dept" name="department">
-        </div>
-        <button type="submit" style="width: 100%; margin-top: 10px;">Créer l'utilisateur</button>
-      </form>
-    </div>
+    <hr>
+    <h4>Ajouter un Utilisateur</h4>
+    <form id="create-user-form">
+      <div class="form-group"><label>Email</label><input type="email" name="email" required></div>
+      <div class="form-group"><label>Mot de passe</label><input type="password" name="password" required></div>
+      <div class="form-group"><label>Username</label><input type="text" name="username" required></div>
+      <div class="form-group">
+        <label>Rôle</label>
+        <select name="role"><option value="chef">Chef d'équipe</option><option value="admin">Administrateur</option></select>
+      </div>
+      <button type="submit">Créer utilisateur</button>
+    </form>
   </aside>
 
   <script src="dashboard.js"></script>
