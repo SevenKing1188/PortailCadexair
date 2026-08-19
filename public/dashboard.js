@@ -1,171 +1,167 @@
 document.addEventListener('DOMContentLoaded', () => {
-  const sidebar = document.getElementById('sidebar');
-  const openSettings = document.getElementById('openSettings');
-  const closeSettings = document.getElementById('closeSettings');
-  const logoutBtn = document.getElementById('logoutBtn');
-  const historyList = document.getElementById('historyList');
-  const createUserForm = document.getElementById('createUserForm');
-  const workOrderForm = document.getElementById('workOrderForm');
-  const detailsModal = document.getElementById('detailsModal');
-  const closeModalBtn = document.getElementById('closeModalBtn');
+  // Sélection des éléments HTML principaux
+  const createUserForm = document.getElementById('create-user-form');
+  const workOrderForm = document.getElementById('work-order-form');
+  const assignedToSelect = document.getElementById('assignedTo') || document.querySelector('select[name="assignedTo"]');
+  const workOrdersList = document.getElementById('work-orders-list');
+  const logoutBtn = document.getElementById('logout-btn');
 
-  // Affichage/Masquage du panneau latéral
-  if (openSettings) {
-    openSettings.addEventListener('click', () => sidebar.classList.add('open'));
-  }
-  if (closeSettings) {
-    closeSettings.addEventListener('click', () => sidebar.classList.remove('open'));
+  // Chargement initial des données
+  loadChefs();
+  loadWorkOrders();
+
+  // 1. Chargement de la liste des chefs d'équipe
+  async function loadChefs() {
+    if (!assignedToSelect) return;
+
+    try {
+      const response = await fetch('/api/chefs');
+      if (!response.ok) throw new Error('Impossible de charger les chefs d\'équipe.');
+
+      const chefs = await response.json();
+      assignedToSelect.innerHTML = '<option value="">Sélectionner un chef d\'équipe</option>';
+
+      chefs.forEach(chef => {
+        const option = document.createElement('option');
+        option.value = chef.id;
+
+        const deptLabel = chef.department ? ` (${chef.department})` : '';
+        option.textContent = `${chef.username}${deptLabel}`;
+
+        assignedToSelect.appendChild(option);
+      });
+    } catch (error) {
+      console.error('❌ Erreur chargement chefs :', error.message);
+    }
   }
 
-  // Déconnexion avec redirection
+  // 2. Soumission du formulaire de création de Bon de Travail
+  if (workOrderForm) {
+    workOrderForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(workOrderForm);
+      const payload = {
+        title: formData.get('title'),
+        clientName: formData.get('clientName'),
+        clientAddress: formData.get('clientAddress'),
+        appointmentDate: formData.get('appointmentDate'),
+        appointmentTime: formData.get('appointmentTime'),
+        department: formData.get('department'),
+        nbHottes: formData.get('nbHottes'),
+        nbPortesAcces: formData.get('nbPortesAcces'),
+        nbVentilateurs: formData.get('nbVentilateurs'),
+        assignedTo: formData.get('assignedTo'),
+        description: formData.get('description')
+      };
+
+      try {
+        const response = await fetch('/api/work-orders', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Erreur lors de la création du bon.');
+          return;
+        }
+
+        alert(data.message || 'Bon de travail créé avec succès !');
+        workOrderForm.reset();
+        loadWorkOrders();
+      } catch (error) {
+        alert('Erreur réseau lors de la création du bon.');
+        console.error(error);
+      }
+    });
+  }
+
+  // 3. Soumission du formulaire de création d'Utilisateur (Corrigé)
+  if (createUserForm) {
+    createUserForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const formData = new FormData(createUserForm);
+      const payload = {
+        username: formData.get('username'),
+        email: formData.get('email'),
+        password: formData.get('password'),
+        role: formData.get('role'),
+        department: formData.get('department') // Ajouté : Requis par l'API backend
+      };
+
+      try {
+        const response = await fetch('/api/create-user', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          alert(data.error || 'Erreur lors de la création de l\'utilisateur.');
+          return;
+        }
+
+        alert(data.message || 'Utilisateur créé avec succès !');
+        createUserForm.reset();
+        loadChefs();
+      } catch (error) {
+        alert('Erreur réseau lors de la création de l\'utilisateur.');
+        console.error(error);
+      }
+    });
+  }
+
+  // 4. Récupération et affichage des Bons de Travail
+  async function loadWorkOrders() {
+    if (!workOrdersList) return;
+
+    try {
+      const response = await fetch('/api/work-orders');
+      if (!response.ok) throw new Error('Erreur lors du chargement des bons.');
+
+      const orders = await response.json();
+      workOrdersList.innerHTML = '';
+
+      if (orders.length === 0) {
+        workOrdersList.innerHTML = '<p>Aucun bon de travail trouvé.</p>';
+        return;
+      }
+
+      orders.forEach(order => {
+        const card = document.createElement('div');
+        card.className = 'work-order-card';
+        card.innerHTML = `
+          <h3>${order.title || 'Tâche sans titre'} - ${order.client_name || 'Client inconnu'}</h3>
+          <p><strong>Département :</strong> ${order.department || 'N/A'}</p>
+          <p><strong>Chef assigné :</strong> ${order.profiles?.username || 'Non assigné'}</p>
+          <p><strong>Rendez-vous :</strong> ${order.appointment_date || 'N/A'} à ${order.appointment_time || 'N/A'}</p>
+          <p><strong>Adresse :</strong> ${order.client_address || 'N/A'}</p>
+          <p><strong>Équipements :</strong> Hottes (${order.nb_hottes || 0}) | Portes (${order.nb_portes_acces || 0}) | Vent. (${order.nb_ventilateurs || 0})</p>
+          <p><strong>Description :</strong> ${order.description || 'Aucune'}</p>
+          <p><strong>Statut :</strong> <span class="badge ${order.status === 'Terminé' ? 'success' : 'pending'}">${order.status || 'En attente'}</span></p>
+        `;
+        workOrdersList.appendChild(card);
+      });
+    } catch (error) {
+      console.error('❌ Erreur chargement bons :', error.message);
+    }
+  }
+
+  // 5. Gestion de la déconnexion
   if (logoutBtn) {
     logoutBtn.addEventListener('click', async () => {
       try {
         await fetch('/api/logout', { method: 'POST' });
-      } catch (err) {
-        console.error("Erreur déconnexion :", err);
-      } finally {
-        window.location.href = '/index.html';
+        window.location.href = '/login.html';
+      } catch (error) {
+        console.error('Erreur lors de la déconnexion :', error);
       }
     });
   }
-
-  // Fermeture de la modale de détails
-  if (closeModalBtn) {
-    closeModalBtn.addEventListener('click', () => {
-      detailsModal.style.display = 'none';
-    });
-  }
-
-  // Chargement des chefs d'équipe
-  async function loadChefs() {
-    try {
-      const res = await fetch('/api/chefs');
-      if (res.ok) {
-        const chefs = await res.json();
-        const select = document.getElementById('woAssignee');
-        if (select) {
-          if (chefs.length === 0) {
-            select.innerHTML = '<option value="">Aucun chef d’équipe disponible</option>';
-            return;
-          }
-          select.innerHTML = chefs.map(c => 
-            `<option value="${c.id}">${c.username} (${c.department})</option>`
-          ).join('');
-        }
-      }
-    } catch (err) {
-      console.error("Erreur lors du chargement des chefs :", err);
-    }
-  }
-
-  // Chargement de l'historique
-  async function loadHistory() {
-    try {
-      const res = await fetch('/api/work-orders');
-      if (res.ok) {
-        const orders = await res.json();
-        if (historyList) {
-          if (orders.length === 0) {
-            historyList.innerHTML = '<p style="color: var(--text-muted);">Aucun bon de travail enregistré.</p>';
-            return;
-          }
-          historyList.innerHTML = orders.map(o => `
-            <div class="history-item" data-id="${o.id}">
-              <div><strong>${o.title}</strong> - ${o.client_name || 'Client N/A'}</div>
-              <div><span style="color:${o.status === 'Terminé' ? '#22c55e' : '#f97316'}">${o.status}</span></div>
-            </div>
-          `).join('');
-
-          document.querySelectorAll('.history-item').forEach(item => {
-            item.addEventListener('click', () => {
-              const id = item.getAttribute('data-id');
-              const order = orders.find(o => o.id == id);
-              if (order) showOrderDetails(order);
-            });
-          });
-        }
-      }
-    } catch (err) {
-      console.error("Erreur lors du chargement de l'historique :", err);
-    }
-  }
-
-  // Affichage des détails d'un bon de travail
-  function showOrderDetails(o) {
-    const assignedName = o.profiles ? o.profiles.username : 'Non assigné';
-    document.getElementById('modalTitle').innerText = o.title;
-    document.getElementById('modalBody').innerHTML = `
-      <p><strong>Client :</strong> ${o.client_name || 'N/A'}</p>
-      <p><strong>Adresse :</strong> ${o.client_address || 'N/A'}</p>
-      <p><strong>Rendez-vous :</strong> ${o.appointment_date || ''} à ${o.appointment_time || ''}</p>
-      <p><strong>Équipements :</strong> ${o.nb_hottes} Hotte(s), ${o.nb_portes_acces} Porte(s), ${o.nb_ventilateurs} Ventilateur(s)</p>
-      <p><strong>Département :</strong> ${o.department}</p>
-      <p><strong>Assigné à :</strong> ${assignedName}</p>
-      <p><strong>Description :</strong> ${o.description}</p>
-      <p><strong>Statut :</strong> ${o.status}</p>
-    `;
-    detailsModal.style.display = 'flex';
-  }
-
-  // Soumission : Création d'utilisateur
-  if (createUserForm) {
-    createUserForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = {
-        username: document.getElementById('username').value,
-        email: document.getElementById('email').value,
-        password: document.getElementById('password').value,
-        role: document.getElementById('role').value,
-        department: document.getElementById('department').value
-      };
-
-      const res = await fetch('/api/create-user', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      alert(data.message || data.error);
-      if (res.ok) {
-        createUserForm.reset();
-        loadChefs();
-      }
-    });
-  }
-
-  // Soumission : Création de bon de travail
-  if (workOrderForm) {
-    workOrderForm.addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const payload = {
-        title: document.getElementById('woTitle').value,
-        clientName: document.getElementById('clientName').value,
-        clientAddress: document.getElementById('clientAddress').value,
-        appointmentDate: document.getElementById('appointmentDate').value,
-        appointmentTime: document.getElementById('appointmentTime').value,
-        nbHottes: document.getElementById('nbHottes').value,
-        nbPortesAcces: document.getElementById('nbPortesAcces').value,
-        nbVentilateurs: document.getElementById('nbVentilateurs').value,
-        department: document.getElementById('woDepartment').value,
-        assignedTo: document.getElementById('woAssignee').value,
-        description: document.getElementById('woDescription').value
-      };
-
-      const res = await fetch('/api/work-orders', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
-      });
-      const data = await res.json();
-      alert(data.message || data.error);
-      if (res.ok) {
-        workOrderForm.reset();
-        loadHistory();
-      }
-    });
-  }
-
-  loadChefs();
-  loadHistory();
 });
