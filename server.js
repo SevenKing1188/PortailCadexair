@@ -37,7 +37,7 @@ const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
-// Middlewares d'analyse de requêtes (limite 50mb pour le transfert d'images/photos)
+// Middlewares d'analyse de requêtes
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
@@ -88,8 +88,6 @@ const logAuditEvent = async (action, performedBy, targetUser, req) => {
 
     if (error) {
       console.error("❌ ERREUR SUPABASE AUDIT LOG:", error.message, error.details);
-    } else {
-      console.log("✅ Audit log enregistré avec succès !");
     }
   } catch (err) {
     console.error("❌ EXCEPTION AUDIT LOG:", err);
@@ -103,27 +101,32 @@ const isPasswordStrong = (password) => {
 
 // Middleware d'authentification et d'extraction du profil
 const attachUserProfile = async (req, res, next) => {
-  const token = req.cookies.access_token;
-  if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
+  try {
+    const token = req.cookies.access_token;
+    if (!token) return res.status(401).json({ error: 'Accès non autorisé (aucun jeton).' });
 
-  const { data: { user }, error } = await supabase.auth.getUser(token);
-  if (error || !user) {
-    res.clearCookie('access_token', { path: '/', httpOnly: true, sameSite: 'strict' });
-    return res.status(401).json({ error: 'Session invalide ou expirée.' });
+    const { data: { user }, error } = await supabase.auth.getUser(token);
+    if (error || !user) {
+      res.clearCookie('access_token', { path: '/', httpOnly: true, sameSite: 'strict' });
+      return res.status(401).json({ error: 'Session invalide ou expirée.' });
+    }
+
+    const { data: profile } = await supabaseAdmin
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    req.user = user;
+    req.profile = profile || {
+      role: user.email === 'glesieur@cadexair.com' ? 'master' : 'chef_equipe'
+    };
+
+    next();
+  } catch (err) {
+    console.error("❌ Erreur dans attachUserProfile:", err);
+    return res.status(500).json({ error: "Erreur interne lors de l'authentification." });
   }
-
-  const { data: profile } = await supabaseAdmin
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
-    .single();
-
-  req.user = user;
-  req.profile = profile || {
-    role: user.email === 'glesieur@cadexair.com' ? 'master' : 'chef_equipe'
-  };
-
-  next();
 };
 
 // --- ROUTES API ---
@@ -196,18 +199,27 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: `Compte ${role} créé avec succès pour ${username}.` });
 });
 
-// 3. Obtenir la liste des chefs d'équipe
+// 3. Obtenir la liste des chefs d'équipe (Sécurisé et Corrigé)
 app.get('/api/chefs', attachUserProfile, async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('profiles')
-    .select('id, username, department')
-    .eq('role', 'chef_equipe');
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('profiles')
+      .select('id, username, email, department, role')
+      .eq('role', 'chef_equipe');
 
-  if (error) return res.status(400).json({ error: error.message });
-  res.json(data);
+    if (error) {
+      console.error("❌ Erreur Supabase /api/chefs:", error.message, error.details);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json(data || []);
+  } catch (err) {
+    console.error("❌ Exception /api/chefs:", err);
+    res.status(500).json({ error: "Erreur serveur lors de la récupération des chefs d'équipe." });
+  }
 });
 
-// 4. Création d'un bon de travail (Restreint au Master et Admins)
+// 4. Création d'un bon de travail
 app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   const callerRole = req.profile.role;
 
@@ -253,19 +265,24 @@ app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: 'Bon de travail créé et attribué avec succès.' });
 });
 
-// 5. Récupération des bons de travail (avec la syntaxe profiles!assigned_to explicite)
+// 5. Récupération des bons de travail
 app.get('/api/work-orders', attachUserProfile, async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('work_orders')
-    .select('*, profiles!assigned_to(username)')
-    .order('created_at', { ascending: false });
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('work_orders')
+      .select('*, profiles!assigned_to(username)')
+      .order('created_at', { ascending: false });
 
-  if (error) {
-    console.error("❌ Erreur récupération work_orders:", error.message);
-    return res.status(400).json({ error: error.message });
+    if (error) {
+      console.error("❌ Erreur récupération work_orders:", error.message, error.details);
+      return res.status(400).json({ error: error.message });
+    }
+
+    res.json(data || []);
+  } catch (err) {
+    console.error("❌ Exception /api/work-orders:", err);
+    res.status(500).json({ error: "Erreur serveur lors de la récupération des bons de travail." });
   }
-
-  res.json(data);
 });
 
 // 6. Ajout / Mise à jour des photos terrain par le chef d'équipe
@@ -293,4 +310,4 @@ app.post('/api/logout', (req, res) => {
   return res.status(200).json({ message: 'Déconnexion réussie.' });
 });
 
-app.listen(PORT, () => console.log(`Serveur Cadexair v3.1 actif sur le port ${PORT}`));
+app.listen(PORT, () => console.log(`Serveur Cadexair actif sur le port ${PORT}`));
