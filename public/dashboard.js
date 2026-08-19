@@ -199,7 +199,8 @@ document.addEventListener('DOMContentLoaded', async () => {
       } catch (error) {
         console.error('Erreur réseau lors de la déconnexion :', error);
       } finally {
-        window.location.href = '/login.html';
+        // Redirection vers index.html
+        window.location.href = '/index.html';
       }
     });
   }
