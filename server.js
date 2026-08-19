@@ -187,8 +187,9 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
     return res.status(400).json({ error: authError.message });
   }
 
+  // Insertion sans la colonne email si elle n'existe pas dans le schéma
   const { error: profileError } = await supabaseAdmin.from('profiles').insert([
-    { id: authData.user.id, email, username, role, department }
+    { id: authData.user.id, username, role, department }
   ]);
 
   if (profileError) {
@@ -199,12 +200,12 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: `Compte ${role} créé avec succès pour ${username}.` });
 });
 
-// 3. Obtenir la liste des chefs d'équipe (Sécurisé et Corrigé)
+// 3. Obtenir la liste des chefs d'équipe (Corrigé : retrait du champ 'email')
 app.get('/api/chefs', attachUserProfile, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from('profiles')
-      .select('id, username, email, department, role')
+      .select('id, username, department, role')
       .eq('role', 'chef_equipe');
 
     if (error) {
