@@ -192,12 +192,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // 5. Gestion de la déconnexion
   if (logoutBtn) {
-    logoutBtn.addEventListener('click', async () => {
+    logoutBtn.addEventListener('click', async (e) => {
+      e.preventDefault();
       try {
         await fetch('/api/logout', { method: 'POST' });
-        window.location.href = '/login.html';
       } catch (error) {
-        console.error('Erreur lors de la déconnexion :', error);
+        console.error('Erreur réseau lors de la déconnexion :', error);
+      } finally {
+        window.location.href = '/login.html';
       }
     });
   }
