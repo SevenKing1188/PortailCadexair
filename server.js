@@ -15,7 +15,7 @@ const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 // Middlewares de sécurité
 app.use(helmet({
-  contentSecurityPolicy: false // À adapter selon vos besoins CSP
+  contentSecurityPolicy: false // À personnaliser selon vos besoins CSP
 }));
 app.use(express.json());
 app.use(cookieParser());
@@ -23,16 +23,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 // Limitation de débit (Rate Limiting)
 const limiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
+  windowMs: 15 * 60 * 1000, // 15 minutes
   max: 100,
   message: { error: 'Trop de requêtes, veuillez réessayer plus tard.' }
 });
 app.use('/api/', limiter);
 
-// Middleware d'authentification par Cookie
+// Middleware d'authentification par Cookie HTTP-Only
 async function authenticateToken(req, res, next) {
   const token = req.cookies.access_token;
-  if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
+  if (!token) return res.status(401).json({ error: 'Accès non autorisé. Veuillez vous connecter.' });
 
   try {
     const { data: { user }, error } = await supabase.auth.getUser(token);
@@ -47,7 +47,40 @@ async function authenticateToken(req, res, next) {
 
 // --- ROUTES API ---
 
-// 1. Récupération des chefs d'équipe
+// 1. Route de Connexion (Login)
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password) {
+    return res.status(400).json({ error: 'Veuillez fournir un courriel et un mot de passe.' });
+  }
+
+  try {
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password
+    });
+
+    if (error) {
+      return res.status(400).json({ error: 'Identifiants invalides.' });
+    }
+
+    // Stockage du jeton de session dans un cookie sécurisé
+    res.cookie('access_token', data.session.access_token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 24 * 60 * 60 * 1000 // 24 heures
+    });
+
+    return res.status(200).json({ message: 'Connexion réussie !' });
+  } catch (err) {
+    console.error('Erreur lors de la connexion :', err);
+    return res.status(500).json({ error: 'Erreur serveur lors de la connexion.' });
+  }
+});
+
+// 2. Récupération des chefs d'équipe
 app.get('/api/chefs', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -62,7 +95,7 @@ app.get('/api/chefs', authenticateToken, async (req, res) => {
   }
 });
 
-// 2. Création d'un Bon de Travail
+// 3. Création d'un Bon de Travail
 app.post('/api/work-orders', authenticateToken, async (req, res) => {
   const { 
     title, clientName, clientAddress, appointmentDate, 
@@ -95,7 +128,7 @@ app.post('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// 3. Récupération des Bons de Travail
+// 4. Récupération des Bons de Travail
 app.get('/api/work-orders', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -113,7 +146,7 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// 4. Création d'un utilisateur
+// 5. Création d'un Utilisateur (Admin / Chef)
 app.post('/api/create-user', authenticateToken, async (req, res) => {
   const { email, password, username, role, department } = req.body;
 
@@ -143,7 +176,7 @@ app.post('/api/create-user', authenticateToken, async (req, res) => {
   }
 });
 
-// 5. Déconnexion (Suppression du cookie)
+// 6. Déconnexion (Suppression du cookie)
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token', {
     httpOnly: true,
@@ -153,6 +186,7 @@ app.post('/api/logout', (req, res) => {
   return res.status(200).json({ message: 'Déconnexion réussie' });
 });
 
+// Lancement du serveur Express
 app.listen(PORT, () => {
-  console.log(`Serveur démarré sur le port ${PORT}`);
+  console.log(`Serveur prêt et à l'écoute sur le port ${PORT}`);
 });
