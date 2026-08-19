@@ -1,10 +1,28 @@
 document.addEventListener('DOMContentLoaded', async () => {
   // Sélection des éléments HTML principaux
+  const settingsBtn = document.getElementById('settings-btn');
+  const sidePanel = document.getElementById('side-panel');
+  const closePanelBtn = document.getElementById('close-panel-btn');
+  
   const createUserForm = document.getElementById('create-user-form');
   const workOrderForm = document.getElementById('work-order-form');
   const assignedToSelect = document.getElementById('assignedTo') || document.querySelector('select[name="assignedTo"]');
   const workOrdersList = document.getElementById('work-orders-list');
   const logoutBtn = document.getElementById('logout-btn');
+
+  // GESTION DU PANNEAU LATÉRAL (PARAMÈTRES)
+  if (settingsBtn && sidePanel) {
+    settingsBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      sidePanel.classList.toggle('open');
+    });
+  }
+
+  if (closePanelBtn && sidePanel) {
+    closePanelBtn.addEventListener('click', () => {
+      sidePanel.classList.remove('open');
+    });
+  }
 
   // Chargement initial des données
   await loadChefs();
