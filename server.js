@@ -38,7 +38,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// Middleware Authentification Cookie
+// Middleware Authentification via Cookie HTTP-Only
 async function authenticateToken(req, res, next) {
   const token = req.cookies.access_token;
   if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
@@ -54,11 +54,11 @@ async function authenticateToken(req, res, next) {
   }
 }
 
-// Middleware d'autorisation Administrateur
+// Middleware d'autorisation Administrateur + privilèges Master
 async function isAdmin(req, res, next) {
   const userEmail = req.user?.email?.toLowerCase();
 
-  // Traitement prioritaire Master Admin
+  // Traitement privilégié Master Admin
   if (userEmail === MASTER_EMAIL) {
     req.isMaster = true;
     req.userRole = 'admin';
@@ -85,7 +85,7 @@ async function isAdmin(req, res, next) {
 
 // --- ROUTES API ---
 
-// Connexion
+// 1. Connexion
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
   if (!email || !password) return res.status(400).json({ error: 'Identifiants requis.' });
@@ -108,13 +108,13 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
-// Déconnexion
+// 2. Déconnexion
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token');
   return res.status(200).json({ message: 'Déconnexion réussie.' });
 });
 
-// Obtenir la liste des Chefs d'équipe
+// 3. Obtenir les Chefs d'équipe
 app.get('/api/chefs', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -130,7 +130,7 @@ app.get('/api/chefs', authenticateToken, async (req, res) => {
   }
 });
 
-// Obtenir la liste des Employés Terrain
+// 4. Obtenir les Employés Terrain
 app.get('/api/employees', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -146,7 +146,7 @@ app.get('/api/employees', authenticateToken, async (req, res) => {
   }
 });
 
-// Créer un Employé Terrain (Admin)
+// 5. Créer un Employé Terrain (Admin) - avec diagnostic détaillé
 app.post('/api/employees', authenticateToken, isAdmin, async (req, res) => {
   const { fullName } = req.body;
   const cleanName = typeof fullName === 'string' ? fullName.trim() : '';
@@ -156,16 +156,23 @@ app.post('/api/employees', authenticateToken, isAdmin, async (req, res) => {
   }
 
   try {
-    const { data, error } = await supabase.from('employees').insert([{ full_name: cleanName }]);
+    const { data, error } = await supabase
+      .from('employees')
+      .insert([{ full_name: cleanName }])
+      .select();
+
     if (error) throw error;
+
     res.status(201).json({ message: 'Employé créé avec succès !', data });
   } catch (error) {
     console.error('Create Employee Error:', error);
-    res.status(500).json({ error: 'Erreur lors de la création de l\'employé.' });
+    res.status(500).json({ 
+      error: error.message || error.details || 'Erreur lors de la création de l\'employé.' 
+    });
   }
 });
 
-// Supprimer un Employé Terrain (Admin)
+// 6. Supprimer un Employé Terrain (Admin)
 app.delete('/api/employees/:id', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -175,11 +182,13 @@ app.delete('/api/employees/:id', authenticateToken, isAdmin, async (req, res) =>
     res.status(200).json({ message: 'Employé supprimé.' });
   } catch (error) {
     console.error('Delete Employee Error:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression de l\'employé.' });
+    res.status(500).json({ 
+      error: error.message || error.details || 'Erreur lors de la suppression de l\'employé.' 
+    });
   }
 });
 
-// Créer un Bon de Travail (Admin)
+// 7. Créer un Bon de Travail (Admin)
 app.post('/api/work-orders', authenticateToken, isAdmin, async (req, res) => {
   const {
     clientName, clientAddress, contactName, contactPhone, appointmentDate, appointmentTime,
@@ -209,11 +218,13 @@ app.post('/api/work-orders', authenticateToken, isAdmin, async (req, res) => {
     res.status(201).json({ message: 'Bon de travail créé !', data });
   } catch (error) {
     console.error('Create Work Order Error:', error);
-    res.status(500).json({ error: 'Erreur lors de la création du bon de travail.' });
+    res.status(500).json({ 
+      error: error.message || error.details || 'Erreur lors de la création du bon de travail.' 
+    });
   }
 });
 
-// Obtenir la liste des Bons de Travail
+// 8. Obtenir la liste des Bons de Travail
 app.get('/api/work-orders', authenticateToken, async (req, res) => {
   try {
     const { data, error } = await supabase
@@ -229,7 +240,7 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
-// Créer un Utilisateur Système (Admin)
+// 9. Créer un Utilisateur Système (Admin)
 app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
   const { email, password, username, role, department } = req.body;
 
@@ -260,11 +271,13 @@ app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
     res.status(201).json({ message: 'Compte créé avec succès !' });
   } catch (error) {
     console.error('Create User Error:', error);
-    res.status(500).json({ error: 'Erreur lors de la création du compte.' });
+    res.status(500).json({ 
+      error: error.message || error.details || 'Erreur lors de la création du compte.' 
+    });
   }
 });
 
-// Supprimer un Utilisateur Système (Admin avec Verrou Master)
+// 10. Supprimer un Utilisateur Système (Admin avec Verrou Master)
 app.delete('/api/users/:id', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
@@ -277,14 +290,14 @@ app.delete('/api/users/:id', authenticateToken, isAdmin, async (req, res) => {
 
     const targetEmail = targetUserData.user.email?.toLowerCase();
 
-    // Verrouillage de suppression Master
+    // Verrouillage de la suppression pour le compte Master
     if (targetEmail === MASTER_EMAIL) {
       return res.status(403).json({ 
         error: 'Action interdite : Le compte Master Admin ne peut pas être supprimé.' 
       });
     }
 
-    // Restriction : Seul le Master peut supprimer un autre compte Admin
+    // Protection : Seul le Master peut supprimer d'autres administrateurs
     const { data: targetProfile } = await supabase
       .from('profiles')
       .select('role')
@@ -304,16 +317,18 @@ app.delete('/api/users/:id', authenticateToken, isAdmin, async (req, res) => {
 
   } catch (error) {
     console.error('Delete User Error:', error);
-    return res.status(500).json({ error: 'Erreur lors de la suppression de l\'utilisateur.' });
+    res.status(500).json({ 
+      error: error.message || error.details || 'Erreur lors de la suppression de l\'utilisateur.' 
+    });
   }
 });
 
-// Route par défaut
+// Route par défaut (Page d'accueil)
 app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// Démarrage Serveur
+// Démarrage du serveur Express
 app.listen(PORT, () => {
-  console.log(`Serveur opérationnel sur le port ${PORT}`);
+  console.log(`Serveur prêt sur le port ${PORT}`);
 });
