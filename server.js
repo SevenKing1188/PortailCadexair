@@ -8,12 +8,15 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuration du proxy pour Render (Capture correcte des adresses IP)
 app.set('trust proxy', 1);
 
+// Variables Supabase
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+// En-têtes de sécurité HTTP & Content Security Policy (CSP)
 app.use(
   helmet({
     contentSecurityPolicy: {
@@ -28,16 +31,19 @@ app.use(
   })
 );
 
+// Clients Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { autoRefreshToken: false, persistSession: false }
 });
 
+// Middlewares
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 app.use(cookieParser());
 app.use(express.static('public'));
 
+// Protection CSRF
 const csrfOriginCheck = (req, res, next) => {
   if (['POST', 'PUT', 'DELETE', 'PATCH'].includes(req.method)) {
     const origin = req.headers['origin'] || req.headers['referer'];
@@ -50,6 +56,7 @@ const csrfOriginCheck = (req, res, next) => {
 };
 app.use(csrfOriginCheck);
 
+// Limitateurs de requêtes (Rate Limiting)
 const globalLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -63,6 +70,7 @@ const loginLimiter = rateLimit({
   message: { error: 'Trop de tentatives de connexion. Réessayez dans 15 minutes.' }
 });
 
+// Helper pour l'enregistrement des journaux d'audit
 const logAuditEvent = async (action, performedBy, targetUser, req) => {
   try {
     const ipAddress = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '127.0.0.1';
@@ -82,10 +90,12 @@ const logAuditEvent = async (action, performedBy, targetUser, req) => {
   }
 };
 
+// Validation de la robustesse des mots de passe
 const isPasswordStrong = (password) => {
   return /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{12,}$/.test(password);
 };
 
+// Middleware d'authentification et d'extraction du profil
 const attachUserProfile = async (req, res, next) => {
   try {
     const token = req.cookies.access_token;
@@ -117,6 +127,7 @@ const attachUserProfile = async (req, res, next) => {
 
 // --- ROUTES API ---
 
+// 1. Authentification / Connexion
 app.post('/api/login', loginLimiter, async (req, res) => {
   const { email, password } = req.body;
   const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -138,6 +149,7 @@ app.post('/api/login', loginLimiter, async (req, res) => {
   res.json({ message: 'Connexion réussie.' });
 });
 
+// 2. Création d'utilisateur (Renseigne username ET full_name + Rollback automatique)
 app.post('/api/create-user', attachUserProfile, async (req, res) => {
   const { email, password, username, role } = req.body;
   const callerRole = req.profile.role;
@@ -160,6 +172,7 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
     });
   }
 
+  // Étape A : Création dans Supabase Auth
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email,
     password,
@@ -171,13 +184,14 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
     return res.status(400).json({ error: authError.message });
   }
 
-  // Profil créé sans le champ 'department'
+  // Étape B : Insertion/Mise à jour dans `profiles` en remplissant `full_name`
   const { error: profileError } = await supabaseAdmin
     .from('profiles')
     .upsert([
-      { id: authData.user.id, username, role }
+      { id: authData.user.id, username, full_name: username, role }
     ], { onConflict: 'id' });
 
+  // Étape C : Rollback si échec du profil
   if (profileError) {
     console.error("❌ Erreur Profil:", profileError.message);
     await supabaseAdmin.auth.admin.deleteUser(authData.user.id);
@@ -188,6 +202,7 @@ app.post('/api/create-user', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: `Compte ${role} créé avec succès pour ${username}.` });
 });
 
+// 3. Obtenir la liste des chefs d'équipe
 app.get('/api/chefs', attachUserProfile, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
@@ -202,6 +217,7 @@ app.get('/api/chefs', attachUserProfile, async (req, res) => {
   }
 });
 
+// 4. Création d'un bon de travail
 app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   const callerRole = req.profile.role;
 
@@ -240,6 +256,7 @@ app.post('/api/work-orders', attachUserProfile, async (req, res) => {
   res.status(201).json({ message: 'Bon de travail créé avec succès.' });
 });
 
+// 5. Récupération des bons de travail
 app.get('/api/work-orders', attachUserProfile, async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
@@ -254,6 +271,7 @@ app.get('/api/work-orders', attachUserProfile, async (req, res) => {
   }
 });
 
+// 6. Ajout des photos / Finalisation
 app.post('/api/work-orders/:id/photos', attachUserProfile, async (req, res) => {
   const { id } = req.params;
   const { photos } = req.body;
@@ -267,6 +285,7 @@ app.post('/api/work-orders/:id/photos', attachUserProfile, async (req, res) => {
   res.json({ message: 'Photos enregistrées et bon complété.' });
 });
 
+// 7. Déconnexion
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token', {
     path: '/',
