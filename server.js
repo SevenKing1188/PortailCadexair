@@ -8,15 +8,18 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Configuration Supabase
 const supabaseUrl = process.env.SUPABASE_URL;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+// Middlewares de sécurité et parsing
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(express.json());
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// Limitation du nombre de requêtes
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 100,
@@ -24,6 +27,7 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
+// Middleware Authentification via Cookie HTTP-Only
 async function authenticateToken(req, res, next) {
   const token = req.cookies.access_token;
   if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
@@ -39,6 +43,7 @@ async function authenticateToken(req, res, next) {
   }
 }
 
+// Middleware de vérification Administrateur
 async function isAdmin(req, res, next) {
   try {
     const { data, error } = await supabase
@@ -48,7 +53,7 @@ async function isAdmin(req, res, next) {
       .single();
 
     if (error || data?.role !== 'admin') {
-      return res.status(403).json({ error: 'Accès refusé : Seuls les administrateurs peuvent effectuer cette action.' });
+      return res.status(403).json({ error: 'Accès refusé : Seuls les administrateurs ont ces droits.' });
     }
     next();
   } catch (err) {
@@ -58,9 +63,10 @@ async function isAdmin(req, res, next) {
 
 // --- ROUTES API ---
 
+// 1. Connexion (Login)
 app.post('/api/login', async (req, res) => {
   const { email, password } = req.body;
-  if (!email || !password) return res.status(400).json({ error: 'Champs manquants.' });
+  if (!email || !password) return res.status(400).json({ error: 'Identifiants requis.' });
 
   try {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
@@ -79,14 +85,20 @@ app.post('/api/login', async (req, res) => {
   }
 });
 
+// 2. Déconnexion (Logout)
 app.post('/api/logout', (req, res) => {
   res.clearCookie('access_token');
   return res.status(200).json({ message: 'Déconnexion réussie' });
 });
 
+// 3. Récupérer les Chefs d'équipe
 app.get('/api/chefs', authenticateToken, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('profiles').select('id, username, department').eq('role', 'chef');
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('id, username, department')
+      .eq('role', 'chef');
+
     if (error) throw error;
     res.json(data || []);
   } catch (error) {
@@ -94,10 +106,14 @@ app.get('/api/chefs', authenticateToken, async (req, res) => {
   }
 });
 
-// NOUVEAU : Récupérer la liste des employés terrain
+// 4. Récupérer les Employés Terrain
 app.get('/api/employees', authenticateToken, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('employees').select('*').order('full_name', { ascending: true });
+    const { data, error } = await supabase
+      .from('employees')
+      .select('*')
+      .order('full_name', { ascending: true });
+
     if (error) throw error;
     res.json(data || []);
   } catch (error) {
@@ -105,10 +121,10 @@ app.get('/api/employees', authenticateToken, async (req, res) => {
   }
 });
 
-// NOUVEAU : Créer un employé (Admin uniquement)
+// 5. Créer un Employé Terrain (Admin)
 app.post('/api/employees', authenticateToken, isAdmin, async (req, res) => {
   const { fullName } = req.body;
-  if (!fullName) return res.status(400).json({ error: 'Le nom est obligatoire.' });
+  if (!fullName) return res.status(400).json({ error: 'Le nom complet est obligatoire.' });
 
   try {
     const { data, error } = await supabase.from('employees').insert([{ full_name: fullName }]);
@@ -119,8 +135,25 @@ app.post('/api/employees', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
+// 6. Supprimer un Employé Terrain (Admin)
+app.delete('/api/employees/:id', authenticateToken, isAdmin, async (req, res) => {
+  const { id } = req.params;
+  try {
+    const { error } = await supabase.from('employees').delete().eq('id', id);
+    if (error) throw error;
+    res.status(200).json({ message: 'Employé supprimé avec succès.' });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// 7. Créer un Bon de Travail (Admin)
 app.post('/api/work-orders', authenticateToken, isAdmin, async (req, res) => {
-  const { clientName, clientAddress, appointmentDate, appointmentTime, department, nbHottes, nbPortesAcces, nbVentilateurs, assignedTo, description, techniciansLog } = req.body;
+  const {
+    clientName, clientAddress, appointmentDate, appointmentTime,
+    department, nbHottes, nbPortesAcces, nbVentilateurs,
+    assignedTo, description, techniciansLog
+  } = req.body;
 
   try {
     const { data, error } = await supabase.from('work_orders').insert([{
@@ -140,15 +173,20 @@ app.post('/api/work-orders', authenticateToken, isAdmin, async (req, res) => {
     }]);
 
     if (error) throw error;
-    res.status(201).json({ message: 'Bon créé !', data });
+    res.status(201).json({ message: 'Bon de travail créé !', data });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// 8. Récupérer les Bons de Travail
 app.get('/api/work-orders', authenticateToken, async (req, res) => {
   try {
-    const { data, error } = await supabase.from('work_orders').select('*, profiles:assigned_to (username)').order('appointment_date', { ascending: false });
+    const { data, error } = await supabase
+      .from('work_orders')
+      .select('*, profiles:assigned_to(username)')
+      .order('appointment_date', { ascending: false });
+
     if (error) throw error;
     res.json(data || []);
   } catch (error) {
@@ -156,29 +194,43 @@ app.get('/api/work-orders', authenticateToken, async (req, res) => {
   }
 });
 
+// 9. Créer un Utilisateur Système / Nouveau Chef d'équipe (Admin)
 app.post('/api/create-user', authenticateToken, isAdmin, async (req, res) => {
   const { email, password, username, role, department } = req.body;
 
   try {
-    const { data: authData, error: authError } = await supabase.auth.admin.createUser({ email, password, email_confirm: true });
+    const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true
+    });
+
     if (authError) throw authError;
 
-    const { error: profileError } = await supabase.from('profiles').insert([{ id: authData.user.id, username, full_name: username, role, department }]);
+    const { error: profileError } = await supabase.from('profiles').insert([{
+      id: authData.user.id,
+      username,
+      full_name: username,
+      role,
+      department
+    }]);
+
     if (profileError) throw profileError;
 
-    res.status(201).json({ message: 'Utilisateur créé !' });
+    res.status(201).json({ message: 'Nouveau chef d\'équipe créé avec succès !' });
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
 });
 
+// 10. Supprimer un Utilisateur Système (Admin + Verrou Master)
 app.delete('/api/users/:id', authenticateToken, isAdmin, async (req, res) => {
   const { id } = req.params;
 
   try {
     const { data: userData } = await supabase.auth.admin.getUserById(id);
     if (userData?.user?.email?.toLowerCase() === 'glesieur@cadexair.com') {
-      return res.status(403).json({ error: 'Compte Master protégé.' });
+      return res.status(403).json({ error: 'Le compte Master est protégé.' });
     }
 
     await supabase.from('profiles').delete().eq('id', id);
@@ -189,7 +241,12 @@ app.delete('/api/users/:id', authenticateToken, isAdmin, async (req, res) => {
   }
 });
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
-app.get('/login.html', (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+// Redirection accueil
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
 
-app.listen(PORT, () => console.log(`Serveur prêt sur le port ${PORT}`));
+// Lancement du serveur
+app.listen(PORT, () => {
+  console.log(`Serveur prêt et en écoute sur le port ${PORT}`);
+});
