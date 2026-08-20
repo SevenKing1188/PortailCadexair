@@ -1,136 +1,232 @@
-// public/app.js - Portail Cadexair Operations v3.1
-
-// 1. GESTION DU TIROIR / DRAWER PARAMÈTRES ET DÉCONNEXION
-function ouvrirDrawerParametres() {
-    const drawer = document.getElementById('drawer-parametres');
-    if (drawer) {
-        drawer.classList.add('active');
-    }
-}
-
-function fermerDrawerParametres() {
-    const drawer = document.getElementById('drawer-parametres');
-    if (drawer) {
-        drawer.classList.remove('active');
-    }
-}
-
-function fermerDrawerSiFond(event) {
-    if (event.target.id === 'drawer-parametres') {
-        fermerDrawerParametres();
-    }
-}
-
-function deconnexion() {
-    // Effacer cookies ou tokens locaux
-    document.cookie = "access_token=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
-    localStorage.clear();
-
-    fermerDrawerParametres();
-
-    // Rediriger ou mettre à jour l'UI
-    alert('Vous avez été déconnecté avec succès.');
-    window.location.reload();
-}
-
-// 2. GESTION DES EMPLOIÉS ET DE L'AFFECTATION DYNAMIQUE
-let globalEmployeesList = [];
-
-async function loadEmployeesList() {
-    try {
-        const res = await fetch('/api/employees');
-        if (res.ok) {
-            globalEmployeesList = await res.json();
-        }
-    } catch (e) {
-        console.error('Erreur chargement liste employés:', e);
-    }
-}
-
-function ajouterEmployeAffecte() {
-    const container = document.getElementById('liste-employes-affectes');
-    if (!container) return;
-
-    const row = document.createElement('div');
-    row.className = 'employe-row';
-
-    let optionsHtml = '<option value="">-- Sélectionner un employé --</option>';
-    if (globalEmployeesList.length > 0) {
-        globalEmployeesList.forEach(emp => {
-            optionsHtml += `<option value="${emp.id}">${emp.full_name}</option>`;
-        });
-    } else {
-        // Fallback local si l'API n'est pas connectée
-        const fallback = ['Clément', 'Guillaume', 'Justin'];
-        fallback.forEach(name => {
-            optionsHtml += `<option value="${name}">${name}</option>`;
-        });
-    }
-
-    row.innerHTML = `
-        <select class="select-employe-affecte" style="flex: 1; padding: 10px; background: var(--bg-input); border: 1px solid var(--border-color); color: var(--text-main); border-radius: 6px;" required>
-            ${optionsHtml}
-        </select>
-        <button type="button" class="btn-remove-emp" onclick="this.parentElement.remove()">✕</button>
-    `;
-
-    container.appendChild(row);
-}
-
-// 3. SAISIE DES HEURES TRAVAILLÉES
-function toggleSaisieHeures() {
-    const section = document.getElementById('section-saisie-heures');
-    if (section) {
-        if (section.style.display === 'none' || section.style.display === '') {
-            section.style.display = 'block';
-            section.scrollIntoView({ behavior: 'smooth' });
-        } else {
-            section.style.display = 'none';
-        }
-    }
-}
-
-// 4. CHARGEMENT AUTOMATIQUE DES CHEFS D'ÉQUIPE
-async function loadChefsDropdown() {
-    const selectElement = document.getElementById('assignedTo');
-    if (!selectElement) return;
-
-    try {
-        const response = await fetch('/api/chefs');
-        if (!response.ok) throw new Error('Erreur réseau lors de la récupération des chefs.');
-
-        const chefs = await response.json();
-
-        selectElement.innerHTML = '<option value="">-- Sélectionner un chef d équipe --</option>';
-
-        if (chefs.length === 0) {
-            const option = document.createElement('option');
-            option.disabled = true;
-            option.textContent = 'Aucun chef d équipe disponible';
-            selectElement.appendChild(option);
-            return;
-        }
-
-        chefs.forEach(chef => {
-            const option = document.createElement('option');
-            option.value = chef.id;
-            const deptSuffix = chef.department ? ` (${chef.department})` : '';
-            option.textContent = `${chef.name}${deptSuffix}`;
-            selectElement.appendChild(option);
-        });
-    } catch (error) {
-        console.error('Erreur au chargement des chefs d équipe :', error);
-        // Direct fallback option pour la démo locale
-        selectElement.innerHTML = `
-            <option value="">-- Sélectionner un chef d équipe --</option>
-            <option value="1">Guillaume (Chef Équipe / Admin)</option>
-            <option value="2">Clément (Chef Équipe)</option>
-        `;
-    }
-}
-
-// INITIALISATION AU CHARGEMENT
 document.addEventListener('DOMContentLoaded', () => {
-    loadChefsDropdown();
-    loadEmployeesList();
+  // Initialisation des données
+  loadChefsDropdown();
+  loadEmployeesList();
+  loadWorkOrders();
+
+  // Événements des formulaires
+  setupFormListeners();
 });
+
+// 1. Déconnexion
+async function handleLogout() {
+  try {
+    const res = await fetch('/api/logout', { method: 'POST' });
+    if (res.ok) window.location.href = '/login.html';
+  } catch (err) {
+    console.error('Erreur déconnexion :', err);
+  }
+}
+
+// 2. Charger les chefs d'équipe dans le select du bon de travail
+async function loadChefsDropdown() {
+  const selectElement = document.getElementById('assignedTo');
+  if (!selectElement) return;
+
+  try {
+    const response = await fetch('/api/chefs');
+    if (!response.ok) throw new Error('Erreur lors de la récupération des chefs.');
+
+    const chefs = await response.json();
+    selectElement.innerHTML = '<option value="">-- Sélectionner un chef d\'équipe --</option>';
+
+    if (chefs.length === 0) {
+      selectElement.innerHTML += '<option disabled>Aucun chef d\'équipe disponible</option>';
+      return;
+    }
+
+    chefs.forEach(chef => {
+      const option = document.createElement('option');
+      option.value = chef.id;
+      const deptSuffix = chef.department ? ` (${chef.department})` : '';
+      option.textContent = `${chef.name}${deptSuffix}`;
+      selectElement.appendChild(option);
+    });
+  } catch (error) {
+    console.error('Erreur chefs dropdown :', error);
+  }
+}
+
+// 3. Charger et afficher la liste des employés terrain
+async function loadEmployeesList() {
+  const listContainer = document.getElementById('employeesList');
+  if (!listContainer) return;
+
+  try {
+    const res = await fetch('/api/employees');
+    const employees = await res.json();
+
+    listContainer.innerHTML = '';
+    if (employees.length === 0) {
+      listContainer.innerHTML = '<li>Aucun employé terrain enregistré.</li>';
+      return;
+    }
+
+    employees.forEach(emp => {
+      const li = document.createElement('li');
+      li.className = 'flex-between';
+      li.innerHTML = `
+        <span>${emp.full_name}</span>
+        <button onclick="deleteEmployee('${emp.id}')" class="btn-danger-sm">Supprimer</button>
+      `;
+      listContainer.appendChild(li);
+    });
+  } catch (err) {
+    console.error('Erreur employés :', err);
+  }
+}
+
+// 4. Ajouter un employé terrain
+async function handleAddEmployee(e) {
+  e.preventDefault();
+  const input = document.getElementById('employeeFullName');
+  const fullName = input?.value.trim();
+
+  if (!fullName) return alert('Veuillez entrer un nom.');
+
+  try {
+    const res = await fetch('/api/employees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ fullName })
+    });
+
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error);
+
+    alert('Employé ajouté avec succès !');
+    input.value = '';
+    loadEmployeesList();
+  } catch (err) {
+    alert(`Erreur : ${err.message}`);
+  }
+}
+
+// 5. Supprimer un employé terrain
+async function deleteEmployee(id) {
+  if (!confirm('Voulez-vous vraiment supprimer cet employé ?')) return;
+
+  try {
+    const res = await fetch(`/api/employees/${id}`, { method: 'DELETE' });
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error);
+
+    loadEmployeesList();
+  } catch (err) {
+    alert(`Erreur : ${err.message}`);
+  }
+}
+
+// 6. Créer un Utilisateur (Chef ou Admin)
+async function handleCreateUser(e) {
+  e.preventDefault();
+  const form = e.target;
+  const body = {
+    email: form.email.value,
+    password: form.password.value,
+    username: form.username.value,
+    role: form.role.value,
+    department: form.department?.value || ''
+  };
+
+  try {
+    const res = await fetch('/api/create-user', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error);
+
+    alert('Utilisateur créé avec succès !');
+    form.reset();
+    loadChefsDropdown(); // Recharge la liste au cas où c'est un nouveau chef
+  } catch (err) {
+    alert(`Erreur : ${err.message}`);
+  }
+}
+
+// 7. Créer un Bon de Travail
+async function handleCreateWorkOrder(e) {
+  e.preventDefault();
+  const form = e.target;
+  const body = {
+    clientName: form.clientName.value,
+    clientAddress: form.clientAddress.value,
+    contactName: form.contactName.value,
+    contactPhone: form.contactPhone.value,
+    appointmentDate: form.appointmentDate.value,
+    appointmentTime: form.appointmentTime.value,
+    department: form.department.value,
+    nbHottes: form.nbHottes.value,
+    nbPortesAcces: form.nbPortesAcces.value,
+    nbVentilateurs: form.nbVentilateurs.value,
+    assignedTo: form.assignedTo.value || null,
+    description: form.description.value
+  };
+
+  try {
+    const res = await fetch('/api/work-orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+
+    const result = await res.json();
+    if (!res.ok) throw new Error(result.error);
+
+    alert('Bon de travail créé !');
+    form.reset();
+    loadWorkOrders();
+  } catch (err) {
+    alert(`Erreur : ${err.message}`);
+  }
+}
+
+// 8. Obtenir et afficher les bons de travail
+async function loadWorkOrders() {
+  const container = document.getElementById('workOrdersList');
+  if (!container) return;
+
+  try {
+    const res = await fetch('/api/work-orders');
+    const data = await res.json();
+
+    container.innerHTML = '';
+    if (data.length === 0) {
+      container.innerHTML = '<p>Aucun bon de travail enregistré.</p>';
+      return;
+    }
+
+    data.forEach(order => {
+      const chefName = order.profiles?.full_name || order.profiles?.username || 'Non assigné';
+      const card = document.createElement('div');
+      card.className = 'card-work-order';
+      card.innerHTML = `
+        <h3>${order.client_name} - ${order.appointment_date}</h3>
+        <p><strong>Adresse :</strong> ${order.client_address}</p>
+        <p><strong>Chef d'équipe :</strong> ${chefName}</p>
+        <p><strong>Département :</strong> ${order.department}</p>
+      `;
+      container.appendChild(card);
+    });
+  } catch (err) {
+    console.error('Erreur bons de travail :', err);
+  }
+}
+
+// Attachement des événements aux formulaires
+function setupFormListeners() {
+  const createUserForm = document.getElementById('createUserForm');
+  if (createUserForm) createUserForm.addEventListener('submit', handleCreateUser);
+
+  const addEmployeeForm = document.getElementById('addEmployeeForm');
+  if (addEmployeeForm) addEmployeeForm.addEventListener('submit', handleAddEmployee);
+
+  const workOrderForm = document.getElementById('workOrderForm');
+  if (workOrderForm) workOrderForm.addEventListener('submit', handleCreateWorkOrder);
+
+  const logoutBtn = document.getElementById('logoutBtn');
+  if (logoutBtn) logoutBtn.addEventListener('click', handleLogout);
+}

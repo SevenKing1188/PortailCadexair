@@ -1,303 +1,41 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portail Cadexair Operations + Epicor ERP v3.1</title>
-    <style>
-        /* ==========================================================
-           1. THÈMES ET VARIABLES CSS
-        ========================================================== */
-        :root {
-            --bg-body: #0f172a;
-            --bg-card: #1e293b;
-            --bg-input: #0f172a;
-            --text-main: #f8fafc;
-            --text-muted: #94a3b8;
-            --border-color: #334155;
-            --accent-blue: #0284c7;
-            --accent-green: #22c55e;
-            --accent-red: #ef4444;
-            --accent-purple: #a855f7;
-            --accent-orange: #f97316;
-            --accent-epicor: #008080;
-            --header-bg: #1e293b;
-            --header-text: #ffffff;
-            --footer-bg: #1e293b;
-            --drawer-bg: #1e293b;
-        }
-
-        body.light-mode {
-            --bg-body: #f1f5f9;
-            --bg-card: #ffffff;
-            --bg-input: #f8fafc;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --border-color: #cbd5e1;
-            --accent-blue: #0284c7;
-            --accent-green: #16a34a;
-            --accent-red: #dc2626;
-            --accent-purple: #9333ea;
-            --accent-orange: #ea580c;
-            --accent-epicor: #005959;
-            --header-bg: #ffffff;
-            --header-text: #0f172a;
-            --footer-bg: #e2e8f0;
-            --drawer-bg: #ffffff;
-        }
-
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-            transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
-        }
-
-        body {
-            background-color: var(--bg-body);
-            color: var(--text-main);
-            padding-bottom: 20px;
-        }
-
-        header {
-            background: var(--header-bg);
-            color: var(--header-text);
-            padding: 10px 15px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            border-bottom: 1px solid var(--border-color);
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
-            position: sticky;
-            top: 0;
-            z-index: 100;
-        }
-
-        .header-brand { display: flex; align-items: center; gap: 12px; }
-        .header-controls { display: flex; align-items: center; gap: 10px; }
-
-        .btn-settings-header {
-            background: rgba(2, 132, 199, 0.2);
-            border: 1px solid var(--accent-blue);
-            color: var(--text-main);
-            padding: 6px 14px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: bold;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .btn-settings-header:hover { background: var(--accent-blue); color: #ffffff; }
-
-        .user-badge {
-            font-size: 0.75rem;
-            padding: 4px 8px;
-            border-radius: 6px;
-            font-weight: bold;
-            background: var(--accent-blue);
-            color: #ffffff;
-        }
-
-        /* DRAWER / MODALE PARAMÈTRES */
-        .drawer-overlay {
-            position: fixed;
-            top: 0; left: 0; width: 100vw; height: 100vh;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(4px);
-            z-index: 1000;
-            display: flex;
-            justify-content: flex-end;
-            opacity: 0;
-            visibility: hidden;
-            pointer-events: none;
-            transition: opacity 0.3s ease, visibility 0.3s ease;
-        }
-
-        .drawer-overlay.active {
-            opacity: 1;
-            visibility: visible;
-            pointer-events: auto;
-        }
-
-        .drawer-panel {
-            width: 320px;
-            max-width: 85vw;
-            height: 100%;
-            background: var(--drawer-bg);
-            border-left: 1px solid var(--border-color);
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            box-shadow: -5px 0 25px rgba(0, 0, 0, 0.5);
-        }
-
-        .drawer-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 15px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .drawer-title { font-size: 1.1rem; font-weight: bold; }
-        .btn-close-modal { background: none; border: none; color: var(--text-main); font-size: 1.2rem; cursor: pointer; }
-
-        .drawer-body { flex: 1; padding: 20px 0; }
-        .drawer-section { margin-bottom: 25px; }
-        .drawer-section-title { font-size: 0.85rem; text-transform: uppercase; color: var(--text-muted); margin-bottom: 10px; font-weight: bold; }
-
-        .btn-logout-drawer {
-            width: 100%;
-            background: var(--accent-red);
-            color: white;
-            border: none;
-            padding: 10px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        /* CONTAINER & CARDS */
-        .container { padding: 15px; max-width: 800px; margin: 0 auto; }
-        .card {
-            background: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 10px;
-            padding: 18px;
-            margin-bottom: 20px;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-
-        .form-group { margin-bottom: 14px; }
-        label { display: block; margin-bottom: 5px; font-size: 0.9rem; }
-        input, select, textarea {
-            width: 100%;
-            padding: 10px;
-            background: var(--bg-input);
-            border: 1px solid var(--border-color);
-            border-radius: 6px;
-            color: var(--text-main);
-            font-size: 0.95rem;
-        }
-
-        .btn-primary {
-            background: var(--accent-blue);
-            color: white;
-            border: none;
-            padding: 10px 16px;
-            border-radius: 6px;
-            font-weight: bold;
-            cursor: pointer;
-            width: 100%;
-        }
-
-        .employe-row {
-            display: flex;
-            gap: 8px;
-            margin-top: 8px;
-            align-items: center;
-        }
-
-        .btn-remove-emp {
-            background: var(--accent-red);
-            color: white;
-            border: none;
-            padding: 8px 12px;
-            border-radius: 6px;
-            cursor: pointer;
-        }
-    </style>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Portail Cadexair</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="theme-color" content="#0d6efd">
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background-color: #121212;
+      color: #ffffff;
+    }
+    .card {
+      background: #1e1e1e;
+      border-radius: 8px;
+      padding: 20px;
+      margin-top: 20px;
+    }
+  </style>
 </head>
 <body>
+  <h1>Portail Cadexair</h1>
+  <div class="card">
+    <p>Application opérationnelle en ligne.</p>
+  </div>
 
-<!-- EN-TÊTE FIXE -->
-<header>
-    <div class="header-brand">
-        <strong style="font-size: 1.1rem; color: var(--text-main);">Cadexair Operations</strong>
-    </div>
-    <div class="header-controls">
-        <span id="user-role-badge" class="user-badge">Supervision</span>
-        <button type="button" class="btn-settings-header" onclick="ouvrirDrawerParametres()">⚙️ Paramètres</button>
-    </div>
-</header>
-
-<!-- PANNEAU LATÉRAL PARAMÈTRES (DRAWER) -->
-<div id="drawer-parametres" class="drawer-overlay" onclick="fermerDrawerSiFond(event)">
-    <div class="drawer-panel">
-        <div class="drawer-header">
-            <div class="drawer-title">⚙️ Paramètres</div>
-            <button type="button" class="btn-close-modal" onclick="fermerDrawerParametres()">✕</button>
-        </div>
-        <div class="drawer-body">
-            <div class="drawer-section">
-                <div class="drawer-section-title">👤 Session active</div>
-                <div style="font-size: 0.9rem; font-weight: bold; margin-bottom: 12px;" id="drawer-user-info">Guillaume (Admin)</div>
-                <button type="button" class="btn-logout-drawer" id="btn-logout-drawer" onclick="deconnexion()">
-                    🚪 Déconnexion du Portail
-                </button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<!-- CONTAINER PRINCIPAL -->
-<div class="container">
-    <div class="card">
-        <h2>Créer / Assigner un Bon de Travail</h2>
-        <form id="form-work-order" onsubmit="creerNouveauBonDeTravail(event)">
-            <div class="form-group">
-                <label><strong>Nom du Client :</strong></label>
-                <input type="text" id="nouveau-bt-client" placeholder="Ex: Restaurant Le Réservoir" required>
-            </div>
-
-            <div class="form-group">
-                <label><strong>Chef d'équipe assigné :</strong></label>
-                <select id="assignedTo" required>
-                    <option value="">-- Chargement des chefs --</option>
-                </select>
-            </div>
-
-            <div class="form-group">
-                <label><strong>Employés affectés au bon :</strong></label>
-                <div id="liste-employes-affectes">
-                    <!-- Les sélecteurs d'employés s'insèrent ici -->
-                </div>
-                <button type="button" class="btn-primary" style="margin-top: 10px; background: #334155;" onclick="ajouterEmployeAffecte()">
-                    ➕ Affecter un autre employé
-                </button>
-            </div>
-
-            <div class="form-group" style="margin-top: 20px;">
-                <button type="button" class="btn-primary" style="background: var(--accent-purple);" onclick="toggleSaisieHeures()">
-                    ⏱️ Saisir les heures travaillées
-                </button>
-            </div>
-
-            <!-- SECTION SAISIE DES HEURES -->
-            <div id="section-saisie-heures" class="card" style="display: none; background: var(--bg-body); margin-top: 15px;">
-                <h3>Saisie des heures pour l'équipe</h3>
-                <div class="form-group">
-                    <label>Heures Régulières (Total) :</label>
-                    <input type="number" step="0.5" placeholder="8.0">
-                </div>
-                <div class="form-group">
-                    <label>Heures Supplémentaires :</label>
-                    <input type="number" step="0.5" placeholder="0.0">
-                </div>
-            </div>
-
-            <button type="submit" class="btn-primary" style="margin-top: 20px; background: var(--accent-green);">
-                🚀 Enregistrer le Bon de Travail
-            </button>
-        </form>
-    </div>
-</div>
-
-<script src="/app.js"></script>
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then(reg => console.log('Service Worker actif:', reg.scope))
+          .catch(err => console.error('Erreur SW:', err));
+      });
+    }
+  </script>
 </body>
 </html>
