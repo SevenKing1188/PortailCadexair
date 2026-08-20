@@ -1,15 +1,16 @@
 {
-  "name": "portail-securise",
+  "name": "portail-cadexair",
   "version": "1.0.0",
+  "description": "Portail d'opérations Cadexair",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "nodemon server.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
-    "cookie-parser": "^1.4.6",
-    "express": "^4.18.2",
-    "express-rate-limit": "^8.6.2",
-    "helmet": "^8.3.0"
+    "cors": "^2.8.5",
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2"
   }
 }

@@ -1,0 +1,90 @@
+const express = require('express');
+const { createClient } = require('@supabase/supabase-js');
+const cookieParser = require('cookie-parser');
+const path = require('path');
+
+const app = express();
+const PORT = process.env.PORT || 3000;
+
+// Variables d'environnement fournies par Render
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+// Client public pour l'authentification
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// Client d'administration pour créer des utilisateurs directement sans déconnecter la session
+const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: {
+    autoRefreshToken: false,
+    persistSession: false
+  }
+});
+
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(express.static('public'));
+
+// Middleware : Vérification du token de session Supabase
+const authenticateUser = async (req, res, next) => {
+  const token = req.cookies.access_token;
+  if (!token) return res.status(401).json({ error: 'Accès non autorisé.' });
+
+  const { data: { user }, error } = await supabase.auth.getUser(token);
+  if (error || !user) return res.status(401).json({ error: 'Session invalide ou expirée.' });
+
+  req.user = user;
+  next();
+};
+
+// Endpoint : Connexion
+app.post('/api/login', async (req, res) => {
+  const { email, password } = req.body;
+
+  const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  // Envoi du jeton dans un cookie HTTPOnly sécurisé
+  res.cookie('access_token', data.session.access_token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'strict',
+    maxAge: 3600 * 1000 // 1 heure
+  });
+
+  res.json({ message: 'Connexion réussie.' });
+});
+
+// Endpoint : Création d'un nouvel utilisateur (Protégé)
+app.post('/api/create-user', authenticateUser, async (req, res) => {
+  const { email, password } = req.body;
+
+  if (!email || !password || password.length < 6) {
+    return res.status(400).json({ error: 'Le mot de passe doit contenir au moins 6 caractères.' });
+  }
+
+  // Création par le client admin (outrepasse la confirmation par e-mail)
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true
+  });
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  res.status(201).json({ message: `Utilisateur ${data.user.email} créé avec succès.` });
+});
+
+// Endpoint : Déconnexion
+app.post('/api/logout', (req, res) => {
+  res.clearCookie('access_token');
+  res.json({ message: 'Déconnexion réussie.' });
+});
+
+// Démarrage du serveur
+app.listen(PORT, () => {
+  console.log(`Serveur actif sur le port ${PORT}`);
+});
