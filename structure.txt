@@ -1,0 +1,11 @@
+cadexair-portal/
+├── package.json
+├── .env.example
+├── .env (local only - never commit)
+├── server.js
+├── public/
+│   ├── login.html
+│   ├── admin.html
+│   ├── chef.html
+│   └── logout.html
+└── README.md

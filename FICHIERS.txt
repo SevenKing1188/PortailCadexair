@@ -1,0 +1,119 @@
+📦 CADEXAIR PORTAL - FICHIERS COMPLETS
+
+Structure complète du projet:
+
+📁 cadexair-portal/
+│
+├── 📄 server.js                    ← Backend Express (POINT D'ENTRÉE)
+├── 📄 package.json                 ← Dépendances Node
+├── 📄 .gitignore                   ← Ne pas commiter secrets
+├── 📄 .env.example                 ← Template variables env
+│
+├── 📁 public/                      ← Fichiers statiques (HTML)
+│   ├── login.html                  ← Page de connexion
+│   ├── admin.html                  ← Dashboard administrateur
+│   └── chef.html                   ← Dashboard chef d'équipe
+│
+├── 📄 README.md                    ← Documentation complète
+├── 📄 QUICKSTART.md                ← Guide rapide 15 min
+├── 📄 DEPLOY.md                    ← Déploiement Render étape par étape
+├── 📄 supabase-setup.sql           ← Script SQL à copier-coller Supabase
+└── 📄 FICHIERS.txt                 ← Ce fichier
+
+═══════════════════════════════════════════════════════════════
+
+📋 FICHIERS CLÉS À MODIFIER:
+
+1. .env (CRÉER)
+   - Remplacer YOUR_SUPABASE_URL
+   - Remplacer YOUR_SUPABASE_ANON_KEY
+   - Remplacer YOUR_SUPABASE_SERVICE_KEY
+
+2. public/login.html (ÉDITER)
+   - Ligne ~70: SUPABASE_URL = "..."
+   - Ligne ~71: SUPABASE_ANON_KEY = "..."
+
+3. public/admin.html (ÉDITER)
+   - Ligne ~350: SUPABASE_URL = "..."
+   - Ligne ~351: SUPABASE_ANON_KEY = "..."
+
+4. public/chef.html (ÉDITER)
+   - Ligne ~270: SUPABASE_URL = "..."
+   - Ligne ~271: SUPABASE_ANON_KEY = "..."
+
+═══════════════════════════════════════════════════════════════
+
+⚙️ TECHNOLOGIES UTILISÉES:
+
+Backend:
+  - Node.js + Express (API)
+  - Supabase (Auth + Base de données)
+  - CORS (Cross-Origin)
+
+Frontend:
+  - HTML5 + CSS3 + JavaScript
+  - Supabase JS SDK (authentification)
+  - Fetch API (appels HTTP)
+
+Déploiement:
+  - GitHub (version control)
+  - Render (serveur)
+  - Supabase (base de données cloud)
+
+═══════════════════════════════════════════════════════════════
+
+🚀 DÉMARRAGE RAPIDE:
+
+Local:
+  1. npm install
+  2. cp .env.example .env
+  3. Remplir .env avec clés Supabase
+  4. npm start
+  5. Ouvrir http://localhost:3000
+
+Production (Render):
+  1. GitHub: git push
+  2. Render: Connecter repo
+  3. Render: Ajouter env vars
+  4. Render: Deploy
+  5. Accès: https://cadexair-portal.onrender.com
+
+═══════════════════════════════════════════════════════════════
+
+🔐 SÉCURITÉ:
+
+✅ Authentification JWT via Supabase
+✅ Row Level Security (RLS) en base
+✅ Service Key seulement en backend
+✅ Variables d'env sur Render (jamais en code)
+✅ CORS activé
+
+═══════════════════════════════════════════════════════════════
+
+📊 RÔLES & PERMISSIONS:
+
+Admin:
+  ✓ Créer utilisateurs
+  ✓ Assigner bons de travail
+  ✓ Voir tous les bons + statuts
+  ✓ Voir tous les utilisateurs
+
+Chef d'équipe:
+  ✓ Voir ses bons assignés uniquement
+  ✓ Mettre à jour statut (En attente → En cours → Complété)
+  ✗ Ne peut pas voir bons d'autres chefs
+  ✗ Ne peut pas créer utilisateurs
+
+═══════════════════════════════════════════════════════════════
+
+📞 SUPPORT:
+
+- Documentation: README.md
+- Installation rapide: QUICKSTART.md
+- Déploiement: DEPLOY.md
+- SQL: supabase-setup.sql
+
+═══════════════════════════════════════════════════════════════
+
+VERSION: 1.0.0
+PRÊT POUR PRODUCTION: OUI
