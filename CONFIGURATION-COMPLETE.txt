@@ -1,0 +1,88 @@
+═════════════════════════════════════════════════════════
+CADEXAIR PORTAL - CONFIGURATION COMPLÈTE
+═════════════════════════════════════════════════════════
+
+✅ TOUS LES FICHIERS SONT CONFIGURÉS AVEC VOS CLÉS SUPABASE
+
+Projet: cadexair-portal
+Supabase URL: https://mnhwgndkxrgmidomdlyy.supabase.co
+
+═════════════════════════════════════════════════════════
+FICHIERS CONFIGURÉS
+═════════════════════════════════════════════════════════
+
+✅ .env
+   └─ Contient: SUPABASE_URL + SUPABASE_ANON_KEY + SUPABASE_SERVICE_KEY
+   └─ Emplacement: Racine du projet
+
+✅ public/login.html
+   └─ SUPABASE_URL: https://mnhwgndkxrgmidomdlyy.supabase.co
+   └─ SUPABASE_ANON_KEY: eyJhbGciOi... (configurée)
+
+✅ public/admin.html
+   └─ SUPABASE_URL: https://mnhwgndkxrgmidomdlyy.supabase.co
+   └─ SUPABASE_ANON_KEY: eyJhbGciOi... (configurée)
+
+✅ public/chef.html
+   └─ SUPABASE_URL: https://mnhwgndkxrgmidomdlyy.supabase.co
+   └─ SUPABASE_ANON_KEY: eyJhbGciOi... (configurée)
+
+✅ server.js
+   └─ Prêt à l'emploi (aucune modification nécessaire)
+
+✅ package.json
+   └─ Prêt à l'emploi
+
+✅ .gitignore
+   └─ Prêt à l'emploi
+
+✅ supabase-ultra-simple.sql
+   └─ À exécuter dans SQL Editor Supabase
+
+═════════════════════════════════════════════════════════
+PROCHAINES ÉTAPES
+═════════════════════════════════════════════════════════
+
+1. SUPABASE - Créer la base de données:
+   ✓ SQL Editor: Copier-coller supabase-ultra-simple.sql
+   ✓ Cliquer RUN
+
+2. CRÉER ADMIN:
+   ✓ Authentication > Users > Invite new user
+   ✓ Email: admin@cadexair.com
+   ✓ Password: (générer)
+
+3. LOCAL - Lancer l'appli:
+   $ npm install
+   $ npm start
+   $ Ouvrir http://localhost:3000
+
+4. TESTER:
+   ✓ Email: admin@cadexair.com
+   ✓ Password: (celui créé)
+   ✓ Doit afficher dashboard admin
+
+═════════════════════════════════════════════════════════
+FICHIERS À NE PAS MODIFIER
+═════════════════════════════════════════════════════════
+
+✅ .env          - Clés déjà insérées
+✅ login.html    - Clés déjà insérées
+✅ admin.html    - Clés déjà insérées
+✅ chef.html     - Clés déjà insérées
+
+TOUT EST PRÊT - PAS BESOIN D'ÉDITER !
+
+═════════════════════════════════════════════════════════
+SÉCURITÉ
+═════════════════════════════════════════════════════════
+
+⚠️ IMPORTANT:
+- Ne JAMAIS partager .env (contient SERVICE_KEY)
+- Ne PAS commiter .env sur GitHub
+- .gitignore empêche .env d'être versionné
+
+═════════════════════════════════════════════════════════
+VERSION: 1.0 - CONFIGURÉE
+DATE: Août 2024
+═════════════════════════════════════════════════════════
