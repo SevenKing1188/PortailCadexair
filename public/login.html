@@ -160,6 +160,7 @@
   <div class="container">
     <div class="card">
       <div class="logo">
+        <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 100' style='width: 120px; height: 60px; margin: 0 auto 20px;'%3E%3Crect width='200' height='100' fill='%23c41e3a'/%3E%3Ctext x='100' y='60' font-size='32' font-weight='bold' fill='white' text-anchor='middle' font-family='Arial'%3ECADEXAIR%3C/text%3E%3C/svg%3E" alt="Cadexair Logo" style="margin-bottom: 15px;">
         <h1>Cadexair</h1>
         <p>Portail Administratif</p>
       </div>
@@ -172,7 +173,7 @@
           <input 
             type="email" 
             id="email" 
-            placeholder="admin@cadexair.com"
+            placeholder="Entrez votre email"
             required
           >
         </div>
@@ -195,7 +196,7 @@
       </div>
 
       <div class="footer">
-        <p>© 2024 Cadexair - Nettoyage de hottes</p>
+        <p>Cadexair 2026. Version 5.0 Fait par Guillaume.L 2026</p>
       </div>
     </div>
   </div>
@@ -208,9 +209,11 @@
 
     const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+    // Vérifier session existante
     async function checkSession() {
       const { data } = await supabaseClient.auth.getSession();
       if (data.session) {
+        // Récupère le rôle
         const { data: profile } = await supabaseClient
           .from("profiles")
           .select("role")
@@ -227,6 +230,7 @@
 
     checkSession();
 
+    // Login
     document.getElementById("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
@@ -249,6 +253,7 @@
 
         if (error) throw error;
 
+        // Récupère le rôle
         const { data: profile, error: profileError } = await supabaseClient
           .from("profiles")
           .select("role")
@@ -257,6 +262,7 @@
 
         if (profileError) throw profileError;
 
+        // Redirige selon le rôle
         if (profile.role === "admin") {
           window.location = "/admin.html";
         } else if (profile.role === "chef") {
