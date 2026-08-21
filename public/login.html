@@ -206,14 +206,12 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uaHdnbmRreHJnbWlkb21kbHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NTE0ODcsImV4cCI6MjEwMjAyNzQ4N30.RQcFGRK_N7nYUfrw-pW-CXkG1vTTEaAy6fEoSPNvcqc";
     const API_URL = window.location.origin;
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-    // Vérifier session existante
     async function checkSession() {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await supabaseClient.auth.getSession();
       if (data.session) {
-        // Récupère le rôle
-        const { data: profile } = await supabase
+        const { data: profile } = await supabaseClient
           .from("profiles")
           .select("role")
           .eq("id", data.session.user.id)
@@ -229,7 +227,6 @@
 
     checkSession();
 
-    // Login
     document.getElementById("loginForm").addEventListener("submit", async (e) => {
       e.preventDefault();
 
@@ -245,15 +242,14 @@
       loading.style.display = "block";
 
       try {
-        const { data, error } = await supabase.auth.signInWithPassword({
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
           email,
           password,
         });
 
         if (error) throw error;
 
-        // Récupère le rôle
-        const { data: profile, error: profileError } = await supabase
+        const { data: profile, error: profileError } = await supabaseClient
           .from("profiles")
           .select("role")
           .eq("id", data.user.id)
@@ -261,7 +257,6 @@
 
         if (profileError) throw profileError;
 
-        // Redirige selon le rôle
         if (profile.role === "admin") {
           window.location = "/admin.html";
         } else if (profile.role === "chef") {

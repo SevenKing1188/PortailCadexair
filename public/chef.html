@@ -329,13 +329,13 @@
     const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im1uaHdnbmRreHJnbWlkb21kbHl5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY0NTE0ODcsImV4cCI6MjEwMjAyNzQ4N30.RQcFGRK_N7nYUfrw-pW-CXkG1vTTEaAy6fEoSPNvcqc";
     const API_URL = window.location.origin;
 
-    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
     let currentUser = null;
     let currentProfile = null;
 
     // Initialisation
     async function init() {
-      const { data } = await supabase.auth.getSession();
+      const { data } = await supabaseClient.auth.getSession();
       if (!data.session) {
         window.location = "/login.html";
         return;
@@ -366,7 +366,7 @@
 
     // Charge les bons
     async function loadWorkOrders() {
-      const { data: session } = await supabase.auth.getSession();
+      const { data: session } = await supabaseClient.auth.getSession();
       const token = session?.session?.access_token;
 
       try {
@@ -442,7 +442,7 @@
 
     // Met à jour le statut
     async function updateStatus(orderId, newStatus) {
-      const { data: session } = await supabase.auth.getSession();
+      const { data: session } = await supabaseClient.auth.getSession();
       const token = session?.session?.access_token;
       const alertDiv = document.getElementById("alert");
 
@@ -491,7 +491,7 @@
     }
 
     async function logout() {
-      await supabase.auth.signOut();
+      await supabaseClient.auth.signOut();
       window.location = "/login.html";
     }
 
