@@ -27,7 +27,14 @@ const supabase = createClient(
 );
 
 // ============================================
-// MIDDLEWARE: Vérifier Token + Rôle
+// ROUTE: Racine → login.html
+// ============================================
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
+});
+
+// ============================================
+// MIDDLEWARE: Vérifier Token
 // ============================================
 
 async function authMiddleware(req, res, next) {
@@ -44,30 +51,6 @@ async function authMiddleware(req, res, next) {
   } catch (err) {
     res.status(401).json({ error: "Erreur auth" });
   }
-}
-
-async function adminMiddleware(req, res, next) {
-  await authMiddleware(req, res, () => {
-    // Vérifier rôle admin
-    const { error, data } = supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", req.user.id)
-      .single();
-
-    // Utilise admin pour voir la data
-    supabaseAdmin
-      .from("profiles")
-      .select("role")
-      .eq("id", req.user.id)
-      .single()
-      .then(({ data }) => {
-        if (data?.role !== "admin") {
-          return res.status(403).json({ error: "Admin requis" });
-        }
-        next();
-      });
-  });
 }
 
 // ============================================
@@ -109,7 +92,6 @@ app.post("/api/admin/create-user", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "Pas de token" });
 
-  // Vérifie admin
   const { data: userData } = await supabase.auth.getUser(token);
   const { data: profile } = await supabaseAdmin
     .from("profiles")
@@ -132,7 +114,6 @@ app.post("/api/admin/create-user", async (req, res) => {
   }
 
   try {
-    // Crée user Supabase
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -141,7 +122,6 @@ app.post("/api/admin/create-user", async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
 
-    // Crée profil
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -314,14 +294,6 @@ app.patch("/api/workorder/:id/status", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
-});
-
-// ============================================
-// ROUTE: Fichiers statiques
-// ============================================
-
-app.get("/", (req, res) => {
-  res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
 // ============================================
