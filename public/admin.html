@@ -409,7 +409,7 @@
       currentUser = data.session.user;
 
       // Vérifie que c'est un admin
-      const { data: profile } = await supabase
+      const { data: profile } = await supabaseClient
         .from("profiles")
         .select("role")
         .eq("id", currentUser.id)
@@ -433,7 +433,7 @@
 
     // Charge les chefs
     async function loadChefs() {
-      const { data } = await supabase
+      const { data } = await supabaseClient
         .from("profiles")
         .select("id, name")
         .eq("role", "chef")
