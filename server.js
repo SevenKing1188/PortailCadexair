@@ -13,7 +13,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Middleware
 app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "public")));
+
+// ============================================
+// ANTI-CACHE MIDDLEWARE
+// ============================================
+app.use((req, res, next) => {
+  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.set("Pragma", "no-cache");
+  res.set("Expires", "0");
+  next();
+});
+
+app.use(express.static(path.join(__dirname, "public"), {
+  maxAge: 0,
+  etag: false
+}));
 
 // Clients Supabase
 const supabaseAdmin = createClient(
@@ -30,6 +44,9 @@ const supabase = createClient(
 // ROUTE: Racine → login.html
 // ============================================
 app.get("/", (req, res) => {
+  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
   res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
