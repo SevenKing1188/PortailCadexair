@@ -13,21 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Middleware
 app.use(cors());
 app.use(express.json());
-
-// ============================================
-// ANTI-CACHE MIDDLEWARE
-// ============================================
-app.use((req, res, next) => {
-  res.set("Cache-Control", "no-cache, no-store, must-revalidate");
-  res.set("Pragma", "no-cache");
-  res.set("Expires", "0");
-  next();
-});
-
-app.use(express.static(path.join(__dirname, "public"), {
-  maxAge: 0,
-  etag: false
-}));
+app.use(express.static(path.join(__dirname, "public")));
 
 // Clients Supabase
 const supabaseAdmin = createClient(
@@ -41,17 +27,7 @@ const supabase = createClient(
 );
 
 // ============================================
-// ROUTE: Racine → login.html
-// ============================================
-app.get("/", (req, res) => {
-  res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
-  res.setHeader("Pragma", "no-cache");
-  res.setHeader("Expires", "0");
-  res.sendFile(path.join(__dirname, "public", "login.html"));
-});
-
-// ============================================
-// MIDDLEWARE: Vérifier Token
+// MIDDLEWARE: Vérifier Token + Rôle
 // ============================================
 
 async function authMiddleware(req, res, next) {
@@ -68,6 +44,30 @@ async function authMiddleware(req, res, next) {
   } catch (err) {
     res.status(401).json({ error: "Erreur auth" });
   }
+}
+
+async function adminMiddleware(req, res, next) {
+  await authMiddleware(req, res, () => {
+    // Vérifier rôle admin
+    const { error, data } = supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", req.user.id)
+      .single();
+
+    // Utilise admin pour voir la data
+    supabaseAdmin
+      .from("profiles")
+      .select("role")
+      .eq("id", req.user.id)
+      .single()
+      .then(({ data }) => {
+        if (data?.role !== "admin") {
+          return res.status(403).json({ error: "Admin requis" });
+        }
+        next();
+      });
+  });
 }
 
 // ============================================
@@ -109,6 +109,7 @@ app.post("/api/admin/create-user", async (req, res) => {
   const token = req.headers.authorization?.split(" ")[1];
   if (!token) return res.status(401).json({ error: "Pas de token" });
 
+  // Vérifie admin
   const { data: userData } = await supabase.auth.getUser(token);
   const { data: profile } = await supabaseAdmin
     .from("profiles")
@@ -131,6 +132,7 @@ app.post("/api/admin/create-user", async (req, res) => {
   }
 
   try {
+    // Crée user Supabase
     const { data, error } = await supabaseAdmin.auth.admin.createUser({
       email,
       password,
@@ -139,6 +141,7 @@ app.post("/api/admin/create-user", async (req, res) => {
 
     if (error) return res.status(400).json({ error: error.message });
 
+    // Crée profil
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
       .insert({
@@ -257,7 +260,7 @@ app.get("/api/admin/workorders", async (req, res) => {
   try {
     const { data, error } = await supabaseAdmin
       .from("work_orders")
-      .select("*, profiles(name)")
+      .select("*")
       .order("assigned_date", { ascending: false });
 
     if (error) throw error;
@@ -311,6 +314,14 @@ app.patch("/api/workorder/:id/status", async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
+});
+
+// ============================================
+// ROUTE: Fichiers statiques
+// ============================================
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "login.html"));
 });
 
 // ============================================
