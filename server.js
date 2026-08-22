@@ -317,6 +317,310 @@ app.patch("/api/workorder/:id/status", async (req, res) => {
 });
 
 // ============================================
+// PHASE 2: API ENDPOINTS AVANCÉS
+// À AJOUTER dans server.js après les routes existantes
+// ============================================
+
+// ============================================
+// TEAM MEMBERS (Techniciens)
+// ============================================
+
+app.post("/api/team-members", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Pas de token" });
+
+  const { work_order_id, user_id, name, role } = req.body;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("team_members")
+      .insert({
+        work_order_id,
+        user_id,
+        name,
+        role: role || "technician",
+      })
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, member: data[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/work-order/:id/team", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("team_members")
+      .select("*")
+      .eq("work_order_id", id);
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// TIME ENTRIES (Heures travaillées)
+// ============================================
+
+app.post("/api/time-entries", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Pas de token" });
+
+  const { work_order_id, team_member_id, hours, description } = req.body;
+
+  try {
+    const { data, error } = await supabaseAdmin
+      .from("time_entries")
+      .insert({
+        work_order_id,
+        team_member_id,
+        hours,
+        description,
+      })
+      .select();
+
+    if (error) throw error;
+    res.json({ success: true, entry: data[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/work-order/:id/time-entries", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("time_entries")
+      .select("*")
+      .eq("work_order_id", id);
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// WORK ORDER PHOTOS (Upload photos)
+// ============================================
+
+app.post("/api/work-order-photos", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Pas de token" });
+
+  const { data: userData } = await supabase.auth.getUser(token);
+  const { work_order_id, photo_type, photo_base64 } = req.body;
+
+  if (!["hood", "door", "fan"].includes(photo_type)) {
+    return res.status(400).json({ error: "Type de photo invalide" });
+  }
+
+  try {
+    // Générer un nom unique pour la photo
+    const filename = `work_order_${work_order_id}_${photo_type}_${Date.now()}.jpg`;
+
+    // Upload vers Supabase Storage
+    const { data, error: uploadError } = await supabaseAdmin.storage
+      .from("work_order_photos")
+      .upload(filename, Buffer.from(photo_base64, "base64"), {
+        contentType: "image/jpeg",
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Récupérer l'URL publique
+    const { data: urlData } = supabaseAdmin.storage
+      .from("work_order_photos")
+      .getPublicUrl(filename);
+
+    // Enregistrer dans la base de données
+    const { data: photoRecord, error: dbError } = await supabaseAdmin
+      .from("work_order_photos")
+      .insert({
+        work_order_id,
+        photo_type,
+        photo_url: urlData.publicUrl,
+        uploaded_by: userData.user.id,
+      })
+      .select();
+
+    if (dbError) throw dbError;
+
+    res.json({ success: true, photo: photoRecord[0] });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get("/api/work-order/:id/photos", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("work_order_photos")
+      .select("*")
+      .eq("work_order_id", id);
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// WORK ORDER HISTORY (Historique)
+// ============================================
+
+app.get("/api/work-order/:id/history", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    const { data, error } = await supabase
+      .from("work_order_history")
+      .select("*")
+      .eq("work_order_id", id)
+      .order("created_at", { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// REASSIGN WORK ORDER (Réassigner à un chef)
+// ============================================
+
+app.post("/api/work-order/:id/reassign", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Pas de token" });
+
+  const { data: userData } = await supabase.auth.getUser(token);
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return res.status(403).json({ error: "Admin requis" });
+  }
+
+  const { id } = req.params;
+  const { new_chef_id } = req.body;
+
+  try {
+    // Récupérer le bon actuel
+    const { data: order, error: getError } = await supabaseAdmin
+      .from("work_orders")
+      .select("team_leader_id")
+      .eq("id", id)
+      .single();
+
+    if (getError) throw getError;
+
+    // Mettre à jour le bon
+    const { error: updateError } = await supabaseAdmin
+      .from("work_orders")
+      .update({ team_leader_id: new_chef_id })
+      .eq("id", id);
+
+    if (updateError) throw updateError;
+
+    // Enregistrer dans l'historique
+    const { error: historyError } = await supabaseAdmin
+      .from("work_order_history")
+      .insert({
+        work_order_id: id,
+        action: "reassigned",
+        old_chef_id: order.team_leader_id,
+        new_chef_id,
+        changed_by: userData.user.id,
+        details: `Réassigné de ${order.team_leader_id} à ${new_chef_id}`,
+      });
+
+    if (historyError) throw historyError;
+
+    res.json({ success: true, message: "Bon réassigné avec succès" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// GET WORK ORDER DETAILS (Détails complets)
+// ============================================
+
+app.get("/api/work-order/:id/details", async (req, res) => {
+  const { id } = req.params;
+
+  try {
+    // Récupérer le bon
+    const { data: order, error: orderError } = await supabase
+      .from("work_orders")
+      .select("*")
+      .eq("id", id)
+      .single();
+
+    if (orderError) throw orderError;
+
+    // Récupérer les techniciens
+    const { data: team, error: teamError } = await supabase
+      .from("team_members")
+      .select("*")
+      .eq("work_order_id", id);
+
+    if (teamError) throw teamError;
+
+    // Récupérer les heures
+    const { data: timeEntries, error: timeError } = await supabase
+      .from("time_entries")
+      .select("*")
+      .eq("work_order_id", id);
+
+    if (timeError) throw timeError;
+
+    // Récupérer les photos
+    const { data: photos, error: photosError } = await supabase
+      .from("work_order_photos")
+      .select("*")
+      .eq("work_order_id", id);
+
+    if (photosError) throw photosError;
+
+    // Récupérer l'historique
+    const { data: history, error: historyError } = await supabase
+      .from("work_order_history")
+      .select("*")
+      .eq("work_order_id", id)
+      .order("created_at", { ascending: false });
+
+    if (historyError) throw historyError;
+
+    res.json({
+      order,
+      team,
+      timeEntries,
+      photos,
+      history,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
 // ROUTE: Fichiers statiques
 // ============================================
 
