@@ -315,11 +315,145 @@ app.patch("/api/workorder/:id/status", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-
 // ============================================
-// PHASE 2: API ENDPOINTS AVANCÉS
+// ADMIN ENDPOINTS SUPPLÉMENTAIRES
 // À AJOUTER dans server.js après les routes existantes
 // ============================================
+
+// ============================================
+// DELETE USER (Supprimer utilisateur)
+// ============================================
+
+app.delete("/api/admin/delete-user", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Pas de token" });
+
+  const { data: userData } = await supabase.auth.getUser(token);
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return res.status(403).json({ error: "Admin requis" });
+  }
+
+  const { user_id } = req.body;
+
+  if (!user_id) {
+    return res.status(400).json({ error: "user_id requis" });
+  }
+
+  try {
+    // Supprimer l'utilisateur auth via admin API
+    const { error } = await supabaseAdmin.auth.admin.deleteUser(user_id);
+
+    if (error) throw error;
+
+    res.json({ success: true, message: "Utilisateur supprimé" });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// UPLOAD SCHEDULE (Horaire PDF)
+// ============================================
+
+app.post("/api/upload-schedule", async (req, res) => {
+  const token = req.headers.authorization?.split(" ")[1];
+  if (!token) return res.status(401).json({ error: "Pas de token" });
+
+  const { data: userData } = await supabase.auth.getUser(token);
+  const { data: profile } = await supabaseAdmin
+    .from("profiles")
+    .select("role")
+    .eq("id", userData.user.id)
+    .single();
+
+  if (profile?.role !== "admin") {
+    return res.status(403).json({ error: "Admin requis" });
+  }
+
+  const { pdf_base64 } = req.body;
+
+  if (!pdf_base64) {
+    return res.status(400).json({ error: "PDF requis" });
+  }
+
+  try {
+    // Générer un nom unique
+    const filename = `schedule_${Date.now()}.pdf`;
+
+    // Upload vers Supabase Storage
+    const { data, error: uploadError } = await supabaseAdmin.storage
+      .from("schedules")
+      .upload(filename, Buffer.from(pdf_base64, "base64"), {
+        contentType: "application/pdf",
+        upsert: true, // Remplacer s'il existe
+      });
+
+    if (uploadError) throw uploadError;
+
+    // Récupérer l'URL publique
+    const { data: urlData } = supabaseAdmin.storage
+      .from("schedules")
+      .getPublicUrl(filename);
+
+    res.json({
+      success: true,
+      url: urlData.publicUrl,
+      message: "Horaire uploadé",
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// GET SCHEDULE (Récupérer l'horaire)
+// ============================================
+
+app.get("/api/get-schedule", async (req, res) => {
+  try {
+    // Lister les fichiers du bucket
+    const { data, error } = await supabaseAdmin.storage
+      .from("schedules")
+      .list("", {
+        limit: 1,
+        sortBy: { column: "updated_at", order: "desc" },
+      });
+
+    if (error) throw error;
+
+    if (!data || data.length === 0) {
+      return res.json({ url: null, message: "Aucun horaire" });
+    }
+
+    // Récupérer l'URL du dernier fichier
+    const latestFile = data[0];
+    const { data: urlData } = supabaseAdmin.storage
+      .from("schedules")
+      .getPublicUrl(latestFile.name);
+
+    res.json({
+      url: urlData.publicUrl,
+      filename: latestFile.name,
+      uploadedAt: latestFile.updated_at,
+    });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ============================================
+// STORAGE BUCKETS
+// ============================================
+// Important: Créer deux buckets dans Supabase Storage:
+// 1. "schedules" - Public (pour les horaires PDF)
+// 2. "work_order_photos" - Public (pour les photos des bons)
+
 
 // ============================================
 // TEAM MEMBERS (Techniciens)
